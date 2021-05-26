@@ -1,0 +1,123 @@
+\documentclass[11pt]{article}
+\usepackage[a4paper, hmargin={2.8cm, 2.8cm}, vmargin={2.5cm, 2.5cm}]{geometry}
+\usepackage{eso-pic} % \AddToShipoutPicture
+\usepackage{graphicx} % \includegraphics
+\usepackage{minted}
+\usepackage{listings}                 % Source code printer for LaTeX
+\usepackage{caption}
+
+%% Change `ku-farve` to `nat-farve` to use SCIENCE's old colors or
+%% `natbio-farve` to use SCIENCE's new colors and logo.
+\def \ColourPDF {include/natbio-farve}
+
+%% Change `ku-en` to `nat-en` to use the `Faculty of Science` header
+\def \TitlePDF   {include/nat-en}  % University of Copenhagen
+
+\title{
+  \vspace{3cm}
+  \Huge{A WebAssembly Backend for Futhark} \\
+  \Large{Msc Thesis}
+}
+
+\author{
+  \Large{Philip Lassen}
+  \\ \texttt{philiplassen@gmail.com} \\
+}
+
+\date{
+    \today
+}
+
+\begin{document}
+
+
+\AddToShipoutPicture*{\put(0,0){\includegraphics*[viewport=0 0 700 600]{\ColourPDF}}}
+\AddToShipoutPicture*{\put(0,602){\includegraphics*[viewport=0 600 700 1600]{\ColourPDF}}}
+
+\AddToShipoutPicture*{\put(0,0){\includegraphics*{\TitlePDF}}}
+
+\clearpage\maketitle
+\thispagestyle{empty}
+
+\newpage
+
+%% Write your dissertation here.
+
+\begin{abstract}
+More and more general purpose software runs in the browser and in order to exploit advances in parallel processing capabilities of modern computer hardware it is advantageous to invoke parallel programming in the browser, and do it with a high level programming language without the need for domain knowledge, memory safety, etc.
+\end{abstract}
+
+
+\newpage
+\tableofcontents
+\newpage
+
+
+
+\newpage
+
+
+
+
+
+\section{Web Workers}
+
+
+
+JavaScript is single threaded. Meaning it consists of a single call stack and a single memory heap. This is slightly counter intuitive as idiomatic JavaScript often contains many asynchronous function calls. Asynchronous function calls are achieved by placing promises/callbacks into an event queue, which runs after the main thread has finished processing. This way they avoid blocking synchronous JavaScript code from running. 
+
+There are three primitives used for doing multithreaded programming in the browser: Web Workers, Shared Memory, and Atomics. These features will be introduced below with a running example. 
+
+
+\subsection{Web Workers}
+Parallelism with JavaScript in browsers is achieved through web workers. Web workers are extra threads of execution beyond the main thread. The threads interact via message passing. Typically messages are passed through the postMessage and onmessage. postMessage is used to send a message between threads and onmessage works as an event handler to receive messages from threads. 
+
+
+Web workers are relatively heavyweight, and should not be created in large numbers. They are expected to be long lived and have both high start and high per instance memory cost. 
+
+The following example computes the Riemann integral of sine over an interval from 0. The interval is broken up into subintervals which are computed by seperate workers.
+
+
+\inputminted[fontsize=\small,baselinestretch=0.5,linenos]{html}{code/integrate.html}
+\captionof{listing}{Example of a worker working}
+
+\inputminted[fontsize=\small,baselinestretch=0.5,linenos]{javascript}{code/worker.js}
+\captionof{listing}{This is a worker}
+
+TODO: Explain the worker code a little bit more
+
+
+A web server needs to be launched in order to run this example in a browser. The simplest way to get this up and running is to run \texttt{python3 -m http.server 8000} in the directory with the source files.  And then opening \texttt{http://localhost:8000/integrate.html} in the browser.
+
+Using chrome on a macbook pro the example took approximately 18 seconds to execute and produce the results shown in figure TODO.
+
+TODO put screenshot
+
+TODO: Explain how web workers are execute by browser engines; More details on how the example uses web workers and the communication between UI thread and worker threads.
+
+
+\subsection{Shared Memory}
+
+
+\newpage
+
+\section{WASM Multicore Implementation}
+
+
+
+Fortunately only small adaptions had to be made to the WASM backend developed earlier, to get it running with Multicore. The futhark Compiler has a backend that generates both Sequential C code as well as a backend that generates multicore C code using POSIX threads. 
+
+
+\subsection{Bootstrapping WASM backend}
+The biggest advantage of leveraging the WASM backend is that any changes in the API, should stay consistent between the WASM and WASM-Multicore backends. Futhark offers 4 backends that generate C code, and 2 backends that generate Python code. In all these cases the API's for the target language are consistent. 
+
+This is greatly beneficial as one of the biggest advantages of Futhark over general use programming languages is that as long as the programmer writes idiomatic Futhark they do not need to concern themselves with the details of how Futhark parallelizes their code. 
+
+\subsection{Design Decisions}
+\begin{itemize}
+    \item Compiler Flags
+    \item Setting Memory vs Allow Memory Growth
+\end{itemize}
+\end{document}
+
+
