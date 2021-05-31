@@ -1,0 +1,5 @@
+TODOs
+
+Coding:
+    remove duplicated code in compile prog betweeen Multicore-Futhark and Multicore
+

@@ -1,0 +1,17 @@
+Parallelism
+
+Concurrency
+
+Multi-threading
+
+Dataraces
+
+Race conditions
+
+Shared Memory
+
+Atomics
+
+Mutexes
+
+Condition variables

@@ -52,6 +52,21 @@ More and more general purpose software runs in the browser and in order to explo
 \tableofcontents
 \newpage
 
+\section{Introduction}
+
+\section{Background}
+
+\section{WASM}
+
+\newpage
+
+
+\section{WASM backend Implementation}
+
+There are multiple approaches that can be taken to generate WASM from a language source code. Generally languages will have a compiler frontend that takes the source code of that language and translate it to the LLVM Intermediate Representation. Then using the LLVM compiler toolchain, WASM code can be generated. 
+
+
+Emscripten is a compiler toolchain that allows fi
 
 
 \newpage
@@ -60,7 +75,7 @@ More and more general purpose software runs in the browser and in order to explo
 
 
 
-\section{Web Workers}
+\section{Parallel Execution in the Browser}
 
 
 
@@ -74,15 +89,18 @@ Parallelism with JavaScript in browsers is achieved through web workers. Web wor
 
 
 Web workers are relatively heavyweight, and should not be created in large numbers. They are expected to be long lived and have both high start and high per instance memory cost. 
+TODO show why/where this information comes from (FOLLOW UP FROM ABOVE)
 
 The following example computes the Riemann integral of sine over an interval from 0. The interval is broken up into subintervals which are computed by seperate workers.
 
 
-\inputminted[fontsize=\small,baselinestretch=0.5,linenos]{html}{code/integrate.html}
-\captionof{listing}{Example of a worker working}
+\inputminted[fontsize=\small,baselinestretch=0.5,linenos]{html}{code/worker/integrate.html}
+%\captionof{listing}{Example of a worker working}
 
-\inputminted[fontsize=\small,baselinestretch=0.5,linenos]{javascript}{code/worker.js}
-\captionof{listing}{This is a worker}
+\inputminted[fontsize=\small,baselinestretch=0.5,linenos]{javascript}{code/worker/worker.js}
+%\captionof{listing}{This is a worker}
+
+TODO: Add caption with file names
 
 TODO: Explain the worker code a little bit more
 
@@ -93,10 +111,31 @@ Using chrome on a macbook pro the example took approximately 18 seconds to execu
 
 TODO put screenshot
 
-TODO: Explain how web workers are execute by browser engines; More details on how the example uses web workers and the communication between UI thread and worker threads.
+TODO: Explain how web workers are executed by browser engines; More details on how the example uses web workers and the communication between UI thread and worker threads.
 
 
 \subsection{Shared Memory}
+
+Web workers with message passing have some similarities in how parallelism is executed with the Erlang programming language. Both of which use message passing to coordinate parallel execution. However many other programming languages and libraries also support and utilize shared memory. An example of this is C/C++ and POSIX threads. Shared memory maps closely to modern multicore hardware, and is faster for certain workloads (TODO GIVE EXAMPLE). However it comes at the cost of a new set of bugs in the shape of data races, which is why languages such as Erlang and Futhark itself abstracts the construct away from the programmer.
+
+
+JavaScript also offers shared memory through SharedArrayBuffers. A SharedArrayBuffer points to a piece of linear memory. The SharedArrayBuffer can be passed to multiple web workers who can access the memory in parallel. Figure (TBD) demonstrates how to use SharedArrayBuffers by modifying the earlier example in figure (TBD).
+
+
+\inputminted[fontsize=\small,baselinestretch=0.5,linenos]{html}{code/shared/integrate.html}
+%\captionof{listing}{Example of a worker working}
+
+\inputminted[fontsize=\small,baselinestretch=0.5,linenos]{javascript}{code/shared/worker.js}
+%\captionof{listing}{This is a worker}
+
+TODO explain the code modifications
+
+
+\subsection{Atomics}
+
+In principle safe access to shared memory can be coordinated with message passing, but it's far more efficient for fine grained synchronization to use atomic operations, which map efficiently to the underlying hardware. Atomic operations make sure that predictable values are written and read, that operations are finished before the next operation starts and that operations are not interrupted (TODO cite Atomics Javascript page). The Atomics package in JavaScript contains functions for performing atomic operations on SharedArrayBuffers. The Atomics package also includes wait and notify functions, like condition variable methods.
+
+TODO: Revise the code example to work with atomics.
 
 
 \newpage
@@ -105,19 +144,55 @@ TODO: Explain how web workers are execute by browser engines; More details on ho
 
 
 
-Fortunately only small adaptions had to be made to the WASM backend developed earlier, to get it running with Multicore. The futhark Compiler has a backend that generates both Sequential C code as well as a backend that generates multicore C code using POSIX threads. 
+Fortunately only small adaptions had to be made to the WASM backend developed earlier, to get it running with Multicore. The futhark Compiler has a backend that generates both Sequential C code as well as a backend that generates multicore C code using POSIX threads. As discussed Emscripten can translate multicore C code that uses POSIX threads to multicore WASM that can run in parallel in the browser. 
+
+The main advantage of leveraging the WASM backend is that any changes in the API, should stay consistent between the WASM and WASM-Multicore backends (TODO: TALK ABOUT SHARED RUNTIME). Futhark offers 4 backends that generate C code, and 2 backends that generate Python code. In all these cases the API's for the target language are consistent. 
 
 
-\subsection{Bootstrapping WASM backend}
-The biggest advantage of leveraging the WASM backend is that any changes in the API, should stay consistent between the WASM and WASM-Multicore backends. Futhark offers 4 backends that generate C code, and 2 backends that generate Python code. In all these cases the API's for the target language are consistent. 
+This is greatly beneficial as one of the biggest advantages of Futhark over general use programming languages is that as long as the programmer writes idiomatic Futhark they do not need to concern themselves with the low level details of how Futhark parallelizes their code. 
 
-This is greatly beneficial as one of the biggest advantages of Futhark over general use programming languages is that as long as the programmer writes idiomatic Futhark they do not need to concern themselves with the details of how Futhark parallelizes their code. 
+\subsection{Implementation Structure}
+
+Below we discuss how to add a new futhark backend that can be invoked from the command line with \texttt{futhark wasm-multicore}. It is structured very similarly to the plain wasm backend described chapter 2. Instead of calling Emscripten on the Sequential C, we apply it to futhark's multicore C backend. We utilize the wasm runtime code written in chapter 2, for the backend and add the necessary Emscripten compiler flags required to enable Multicore WASM. Figure (TBD) illustrates the structure of the WASM multicore implementation.
+
+\begin{verbatim}
+    
+Diagram   
+                                       EMCC
+Futhark src -> Futhark IR -> C           ->                    -> (1.js, 1.wasm)
+                             Multicore C ->                    -> (2.js, 1.wasm)
+                                               SHARED JS CODE
+\end{verbatim}
+
+One of the key differences that can be seen in the figure is that the wasm-multicore backend produes 2 javascript files and 1 Wasm file as opposed to the Sequential Wasm backend which generates 1 JavaScript file and 1 WASM file. The second file is the web worker file, which is used to launch threads that run WASM, allowing for the desired multi-threaded computation.
+
+\subsection{Implementation Details}
+Here we discuss the series of steps that were needed complete the implementation.
+\subsubsection{Actions}
+How to pipe multicore C and emscripten together
+
+\subsubsection{Headers}
+Changes to the generated Multicore C
+
+
+\subsubsection{Emscripten Invocation}
+Emscripten Flags (specific to multicore)
+
+\subsubsection{Running in browser with HTTP}
+Setting HTTP headers
+
+
+\subsection{Benchmark}
+
+
+
 
 \subsection{Design Decisions}
 \begin{itemize}
     \item Compiler Flags
     \item Setting Memory vs Allow Memory Growth
 \end{itemize}
+
+\section{Conclusion}
+
 \end{document}
-
-
