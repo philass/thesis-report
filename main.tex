@@ -63,12 +63,6 @@ More and more general purpose software runs in the browser and in order to explo
 
 \section{WASM backend Implementation}
 
-There are multiple approaches that can be taken to generate WASM from a language source code. Generally languages will have a compiler frontend that takes the source code of that language and translate it to the LLVM Intermediate Representation. Then using the LLVM compiler toolchain, WASM code can be generated. 
-
-
-Emscripten is a compiler toolchain that allows fi
-
-
 \newpage
 
 
@@ -81,7 +75,7 @@ Emscripten is a compiler toolchain that allows fi
 
 JavaScript is single threaded. Meaning it consists of a single call stack and a single memory heap. This is slightly counter intuitive as idiomatic JavaScript often contains many asynchronous function calls. Asynchronous function calls are achieved by placing promises/callbacks into an event queue, which runs after the main thread has finished processing. This way they avoid blocking synchronous JavaScript code from running. 
 
-There are three primitives used for doing multithreaded programming in the browser: Web Workers, Shared Memory, and Atomics. These features will be introduced below with a running example. 
+There are three primitives used for doing multithreaded programming in the browser: Web Workers, Shared Memory, and Atomics. These features will be introduced in this section along with examples illustrating how they are used in practice. 
 
 
 \subsection{Web Workers}
@@ -91,57 +85,77 @@ Parallelism with JavaScript in browsers is achieved through web workers. Web wor
 Web workers are relatively heavyweight, and should not be created in large numbers. They are expected to be long lived and have both high start and high per instance memory cost. 
 TODO show why/where this information comes from (FOLLOW UP FROM ABOVE)
 
-The following example computes the Riemann integral of sine over an interval from 0. The interval is broken up into subintervals which are computed by seperate workers.
+The following example computes the Riemann integral of sine over an interval from 0. The interval is broken up into subintervals which are computed by separate workers.
 
+\begin{listing}[H] 
+        \inputminted[fontsize=\small,baselinestretch=0.5,linenos]{javascript}{code/worker/integrate.js}
+        \caption{Main file that calls workers which compute prefix sum using shared memory and atomics in parallel} 
+        
+        \label{lst:integrate-js}    
+\end{listing} 
 
-\inputminted[fontsize=\small,baselinestretch=0.5,linenos]{html}{code/worker/integrate.html}
-%\captionof{listing}{Example of a worker working}
-
-\inputminted[fontsize=\small,baselinestretch=0.5,linenos]{javascript}{code/worker/worker.js}
+The example code in Listing \ref{lst:integrate-js} spawns 4 worker threads in lines 5-7. It sends each thread a message with their respective index in lines 18-20. It asynchronously waits for messages from each of the worker threads with their partial result and prints the final result when all the threads have sent a message in lines 10-16.
+\begin{listing}[H] 
+        \inputminted[fontsize=\small,baselinestretch=0.5,linenos]{javascript}{code/worker/worker.js}
+        \caption{Main file that calls workers which compute prefix sum using shared memory and atomics in parallel} 
+        \label{lst:worker-js}    
+\end{listing}    
 %\captionof{listing}{This is a worker}
 
-TODO: Add caption with file names
-
-TODO: Explain the worker code a little bit more
+The code in Listing \ref{lst:worker-js} contains the implementation of the worker threads. Once the thread receives a message from the main thread with their index, they compute the partial Riemann integral over their respective quartile of the interval adding the value of sine(x) as many times as specified by granularity. 
 
 
-A web server needs to be launched in order to run this example in a browser. The simplest way to get this up and running is to run \texttt{python3 -m http.server 8000} in the directory with the source files.  And then opening \texttt{http://localhost:8000/integrate.html} in the browser.
-
-Using chrome on a macbook pro the example took approximately 18 seconds to execute and produce the results shown in figure TODO.
-
-TODO put screenshot
-
-TODO: Explain how web workers are executed by browser engines; More details on how the example uses web workers and the communication between UI thread and worker threads.
+%Web workers provide a clean and simple interface for web programmers to launch threads for parallel computation in the browser. However there are some problems that benefit from and need additional constructs for parallel execution. An example of this would be problems that benefit from in place array updates. 
+%A web server needs to be launched in order to run this example in a browser. The simplest way to get this up and running is to run \texttt{python3 -m http.server 8000} in the directory with the source files.  And then opening \texttt{http://localhost:8000/integrate.html} in the browser.
+%Using chrome on a macbook pro the example took approximately 18 seconds to execute and produce the results shown in figure TODO.
+%TODO put screenshot
+%TODO: Explain how web workers are executed by browser engines; More details on how the example uses web workers and the communication between UI thread and worker threads.
 
 
-\subsection{Shared Memory}
+\subsection{Shared Memory and Atomics}
 
 Web workers with message passing have some similarities in how parallelism is executed with the Erlang programming language. Both of which use message passing to coordinate parallel execution. However many other programming languages and libraries also support and utilize shared memory. An example of this is C/C++ and POSIX threads. Shared memory maps closely to modern multicore hardware, and is faster for certain workloads (TODO GIVE EXAMPLE). However it comes at the cost of a new set of bugs in the shape of data races, which is why languages such as Erlang and Futhark itself abstracts the construct away from the programmer.
 
 
-JavaScript also offers shared memory through SharedArrayBuffers. A SharedArrayBuffer points to a piece of linear memory. The SharedArrayBuffer can be passed to multiple web workers who can access the memory in parallel. Figure (TBD) demonstrates how to use SharedArrayBuffers by modifying the earlier example in figure (TBD).
+JavaScript also offers shared memory through SharedArrayBuffers. A SharedArrayBuffer points to a piece of linear memory. The SharedArrayBuffer can be passed to multiple web workers who can access the memory in parallel. 
 
+In principle safe access to shared memory can be coordinated with message passing, but it's far more efficient for fine grained synchronization to use atomic operations, which again map efficiently to the underlying hardware. Atomic operations make sure that predictable values are written and read, that operations are finished before the next operation starts and that operations are not interrupted (TODO cite Atomics Javascript page). The Atomics package in JavaScript contains functions for performing atomic operations on SharedArrayBuffers. The Atomics package also includes wait and notify functions, like linux futex wait and wake.
 
-\inputminted[fontsize=\small,baselinestretch=0.5,linenos]{html}{code/shared/integrate.html}
+To illustrate shared memory and atomics the following example is an implementation of prefix sum. It is a fundamental parallel algorithm which is used as a building block for many other parallel algorithms. The example implements the shared memory 2 pass algorithm from (TODO). 
+\begin{listing}[H]    
+        \inputminted[fontsize=\small,baselinestretch=0.5,linenos]{javascript}{code/shared/main.js}
+        \caption{Main file that calls workers which compute prefix sum using shared memory and atomics in parallel}    
+        \label{lst:main-js}    
+\end{listing}    
+
+The code in Listing \ref{lst:main-js} spawns 9 worker threads. It sends a message to each of the threads with parameters, some of which are shared array buffers. This allows each of the threads to have access to shared memory. When each thread has sent a message to indicate completion, the final result of prefix sum is logged to the console.
+
 %\captionof{listing}{Example of a worker working}
+\begin{listing}[H]    
+\inputminted[fontsize=\small,baselinestretch=0.5,linenos]{javascript}{code/shared/prefix_sum.js}
+        \caption{Worker file for computing the prefix sum using shared memory and atomics.}    
+        \label{lst:prefixsum-js}    
+\end{listing}    
 
-\inputminted[fontsize=\small,baselinestretch=0.5,linenos]{javascript}{code/shared/worker.js}
-%\captionof{listing}{This is a worker}
-
-TODO explain the code modifications
+The code in Listing \ref{lst:prefixsum-js} handles the actual execution of prefix sum. In the first pass the threads
 
 
-\subsection{Atomics}
 
-In principle safe access to shared memory can be coordinated with message passing, but it's far more efficient for fine grained synchronization to use atomic operations, which map efficiently to the underlying hardware. Atomic operations make sure that predictable values are written and read, that operations are finished before the next operation starts and that operations are not interrupted (TODO cite Atomics Javascript page). The Atomics package in JavaScript contains functions for performing atomic operations on SharedArrayBuffers. The Atomics package also includes wait and notify functions, like condition variable methods.
+\subsection{Threaded WebAssembly}
+There is a proposal to extend the WASM specification with support for threads, namely by leveraging web workers, shared memory, and atomics. Chrome and Firefox and Node.js all have experimental support for threaded WASM. Emscripten supports compilation of C/C++ with pthreads to threaded WASM.
 
-TODO: Revise the code example to work with atomics.
+Threaded WASM uses web workers to create and join threads by calling out to JavaScript. Shared memory is accomplished with SharedArrayBuffer, which integrates with WASM's paged memory model. WASM is extended with atomic operation instructions. Putting it concisely the additions of supporting shared array buffers in WASM and adding atomic operations in WASM was all that was needed to facilitate threaded WASM.
 
+A key observation is that WASM does not natively allow for spawning of threads. This is actually taken care of by the runtime or compiler. Specifically for Emscripten, compiling C code written with pthreads will generate three files. It will generate a WASM file, and Javascript glue code. The glue code takes care of loading the WASM module, populating the memory with the required values, and integrating with the host system as the C code would expect. The C function Pthread\_create is translated to Javascript and not WASM. It instead launches a Javascript Worker, passing it a shared array buffer and the wasm module that it should run. Where the WASM simply needs the shared array buffer and atomics to synchronize.  
+
+
+TODO: Explain the chrome developer video
+
+TODO: Small C example with Pthreads -> find relevant compiled WASM instructinos to use as illustrati
 
 \newpage
 
 \section{WASM Multicore Implementation}
-
 
 
 Fortunately only small adaptions had to be made to the WASM backend developed earlier, to get it running with Multicore. The futhark Compiler has a backend that generates both Sequential C code as well as a backend that generates multicore C code using POSIX threads. As discussed Emscripten can translate multicore C code that uses POSIX threads to multicore WASM that can run in parallel in the browser. 
@@ -150,6 +164,8 @@ The main advantage of leveraging the WASM backend is that any changes in the API
 
 
 This is greatly beneficial as one of the biggest advantages of Futhark over general use programming languages is that as long as the programmer writes idiomatic Futhark they do not need to concern themselves with the low level details of how Futhark parallelizes their code. 
+
+
 
 \subsection{Implementation Structure}
 
@@ -169,8 +185,7 @@ One of the key differences that can be seen in the figure is that the wasm-multi
 \subsection{Implementation Details}
 Here we discuss the series of steps that were needed complete the implementation.
 \subsubsection{Actions}
-How to pipe multicore C and emscripten together
-
+Following the same process as the sequential WASM backend we simply need to define a compile program function that takes the C code generated from the Multicore C backend and
 \subsubsection{Headers}
 Changes to the generated Multicore C
 
