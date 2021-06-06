@@ -71,11 +71,11 @@ More and more general purpose software runs in the browser and in order to explo
 
 \section{Parallel Execution in the Browser}
 
-
+Browsers have facilities for parallel programming. Javascript supports two different paradigms. Web workers and message passing enable parallel programming without shared memory. SharedArrayBuffer and atomics enable shared memory multithreading with thread synchronization. There is a threaded WASM proposal that adds atomic operations to the language, and adds support for SharedArrayBuffers while relying on JavaScript's web workers to create and join threads. This chapter introduces all these concepts and illustrates them with examples.
 
 JavaScript is single threaded. Meaning it consists of a single call stack and a single memory heap. This is slightly counter intuitive as idiomatic JavaScript often contains many asynchronous function calls. Asynchronous function calls are achieved by placing promises/callbacks into an event queue, which runs after the main thread has finished processing. This way they avoid blocking synchronous JavaScript code from running. 
 
-There are three primitives used for doing multithreaded programming in the browser: Web Workers, Shared Memory, and Atomics. These features will be introduced in this section along with examples illustrating how they are used in practice. 
+%There are three primitives used for doing multithreaded programming in the browser: Web Workers, Shared Memory, and Atomics. These features will be introduced in this section along with examples illustrating how they are used in practice. 
 
 
 \subsection{Web Workers}
@@ -89,7 +89,7 @@ The following example computes the Riemann integral of sine over an interval fro
 
 \begin{listing}[H] 
         \inputminted[fontsize=\small,baselinestretch=0.5,linenos]{javascript}{code/worker/integrate.js}
-        \caption{Main file that calls workers which compute prefix sum using shared memory and atomics in parallel} 
+        \caption{Main file that calls workers which handle the computation of Riemann integral} 
         
         \label{lst:integrate-js}    
 \end{listing} 
@@ -97,19 +97,21 @@ The following example computes the Riemann integral of sine over an interval fro
 The example code in Listing \ref{lst:integrate-js} spawns 4 worker threads in lines 5-7. It sends each thread a message with their respective index in lines 18-20. It asynchronously waits for messages from each of the worker threads with their partial result and prints the final result when all the threads have sent a message in lines 10-16.
 \begin{listing}[H] 
         \inputminted[fontsize=\small,baselinestretch=0.5,linenos]{javascript}{code/worker/worker.js}
-        \caption{Main file that calls workers which compute prefix sum using shared memory and atomics in parallel} 
+        \caption{Worker thread logic for computing Riemann integral} 
         \label{lst:worker-js}    
 \end{listing}    
-%\captionof{listing}{This is a worker}
 
-The code in Listing \ref{lst:worker-js} contains the implementation of the worker threads. Once the thread receives a message from the main thread with their index, they compute the partial Riemann integral over their respective quartile of the interval adding the value of sine(x) as many times as specified by granularity. 
+The code in Listing \ref{lst:worker-js} contains the implementation of the worker threads. Once the thread receives a message from the main thread with their index, they compute the partial Riemann integral over their respective quartile of the interval adding the value of sine(x) as many times as specified by granularity. Figure \ref{png:integrate} shows the execution time of the code against a different number of web workers.
 
 
-%Web workers provide a clean and simple interface for web programmers to launch threads for parallel computation in the browser. However there are some problems that benefit from and need additional constructs for parallel execution. An example of this would be problems that benefit from in place array updates. 
-%A web server needs to be launched in order to run this example in a browser. The simplest way to get this up and running is to run \texttt{python3 -m http.server 8000} in the directory with the source files.  And then opening \texttt{http://localhost:8000/integrate.html} in the browser.
-%Using chrome on a macbook pro the example took approximately 18 seconds to execute and produce the results shown in figure TODO.
-%TODO put screenshot
-%TODO: Explain how web workers are executed by browser engines; More details on how the example uses web workers and the communication between UI thread and worker threads.
+
+\begin{figure}[htbp]
+\centerline{\includegraphics[scale=0.75]{integrate_exe_times.png}}
+\caption{Execution time of Riemann integration for different thread counts. Run on a Macbook Pro with 2,2 GHz 6-Core Intel Core i7}
+\label{png:integrate}
+\end{figure}
+
+The code execution time in \ref{png:integrate} is for the Reimann integral computed with one billion sample values. For one worker thread the execution time was 11.11 seconds. For two threads the execution time was 6.8 seconds, which is nearly double as fast. However as the number of threads increases the increase in execution speed tapers off. Going from 8 to 12 cores only yields a marginal increase in execution speed going from 2.45 second to 2.39. Once more than twelve worker threads are exceeded, there is no longer a marginal increase in speedup. This can be attributed to the physical limitation of threads on the hardware the code was exectuted on. The number of logical CPU's on was 12, meaning that any additional web worker launched after the initial 12 must wait on the thread pool for another to finish before it can be activated. In which case the overhead of launching it is only detrimental to the complete execution time of the program
 
 
 \subsection{Shared Memory and Atomics}
@@ -137,64 +139,87 @@ The code in Listing \ref{lst:main-js} spawns 9 worker threads. It sends a messag
         \label{lst:prefixsum-js}    
 \end{listing}    
 
+TODO: Show speed up over one worker vs 9 workers
+
+TODO update code to be cleaner and easier to explain
+
+TODO complete explenation
 The code in Listing \ref{lst:prefixsum-js} handles the actual execution of prefix sum. In the first pass the threads
 
 
+ToDo talk about shared memory paradigm
+TODO talk about Javascript's two paradigms
 
 \subsection{Threaded WebAssembly}
 There is a proposal to extend the WASM specification with support for threads, namely by leveraging web workers, shared memory, and atomics. Chrome and Firefox and Node.js all have experimental support for threaded WASM. Emscripten supports compilation of C/C++ with pthreads to threaded WASM.
 
-Threaded WASM uses web workers to create and join threads by calling out to JavaScript. Shared memory is accomplished with SharedArrayBuffer, which integrates with WASM's paged memory model. WASM is extended with atomic operation instructions. Putting it concisely the additions of supporting shared array buffers in WASM and adding atomic operations in WASM was all that was needed to facilitate threaded WASM.
+Threaded WASM uses web workers to create and join threads. It doesn't natively invoke web workers but instead handles this by calling out to JavaScript. Shared memory is accomplished by integrating SharedArrayBuffer with WASM's paged memory model. WASM is extended with atomic operation instructions. Putting it concisely the additions of supporting shared array buffers in WASM and adding atomic operations in WASM was all that was needed to facilitate threaded WASM.
 
-A key observation is that WASM does not natively allow for spawning of threads. This is actually taken care of by the runtime or compiler. Specifically for Emscripten, compiling C code written with pthreads will generate three files. It will generate a WASM file, and Javascript glue code. The glue code takes care of loading the WASM module, populating the memory with the required values, and integrating with the host system as the C code would expect. The C function Pthread\_create is translated to Javascript and not WASM. It instead launches a Javascript Worker, passing it a shared array buffer and the wasm module that it should run. Where the WASM simply needs the shared array buffer and atomics to synchronize.  
+A key observation is that WASM does not natively allow for spawning of threads. This is actually taken care of by the runtime or compiler. Specifically for Emscripten, compiling C code written with pthreads will generate three files. It will generate a WASM file, and and two Javascript files. One for the main glue code and other for worker glue code. The glue code takes care of loading the WASM module, populating the memory with the required values, and integrating with the host system as the C code would expect. The C function pthread\_create is translated to Javascript and not WASM. It launches a Javascript Worker, passing it a shared array buffer and the wasm module that it should run. The WASM simply needs the shared array buffer and atomics to synchronize.  
 
+\begin{figure}[htbp]
+\centerline{\includegraphics[scale=0.5]{UML_threaded_wasm.png}}
+\caption{UML diagram showing flow of execution of threaded programs in WASM}
+\label{uml}
+\end{figure}
 
-TODO: Explain the chrome developer video
+TODO make updates to UML as specified on piece of paper.
 
-TODO: Small C example with Pthreads -> find relevant compiled WASM instructinos to use as illustrati
+The UML diagram in figure \ref{uml} demonstrates the execution flow of a parallel function written with pthreads in C, compiled by Emscripten, and run in Javascript and WASM. The javascript glue code calls the parallel WASM function, which then calls an external Javascript function that is used to emulate the functionality of pthread\_create. This function launches a new worker, sending it a message with the WASM module, and a shared array buffer, and resumes execution. This JavaScript worker code then  instantiates the WASM module, calling the designated WASM module function. And then with these multiple WASM modules running in parallel, they use atomic instructions native to WASM to facilitate synchronization, as specified in the program.
+
+TODO: Pthreads + memory growth talk about this
+
+TODO: Talk about specifying number of web workers up front with Emscripten
+
+TODO Explain why threaded WASM has no drawbacks becuase it uses the same facilites as javascript for parralel programming while having the speed up of WASM over JS. (Possibly look at over head of launching/loading WASM in a JS worker file).
 
 \newpage
 
-\section{WASM Multicore Implementation}
+\section{WASM Multicore Backend}
 
+This chapter details the extensions that are added to the Futhark compiler to support a multicore WASM backend. It also benchmarks the generated WASM-multicore code against the sequential WASM backend. It also compares the multicore C backend against the WASM-multicore backend running in the browser.
 
-Fortunately only small adaptions had to be made to the WASM backend developed earlier, to get it running with Multicore. The futhark Compiler has a backend that generates both Sequential C code as well as a backend that generates multicore C code using POSIX threads. As discussed Emscripten can translate multicore C code that uses POSIX threads to multicore WASM that can run in parallel in the browser. 
+Fortunately only small adaptions had to be made to the WASM backend developed earlier, to get it running with Multicore. The futhark Compiler has a backend that generates both Sequential C code as well as a backend that generates multicore C code using POSIX threads. As discussed Emscripten can translate multicore C code that uses POSIX threads to multicore WASM that can run in parallel in the browser. The JavaScript API developed in chapter 4 stays unchanged for the WASM-multicore backend. 
 
-The main advantage of leveraging the WASM backend is that any changes in the API, should stay consistent between the WASM and WASM-Multicore backends (TODO: TALK ABOUT SHARED RUNTIME). Futhark offers 4 backends that generate C code, and 2 backends that generate Python code. In all these cases the API's for the target language are consistent. 
-
-
-This is greatly beneficial as one of the biggest advantages of Futhark over general use programming languages is that as long as the programmer writes idiomatic Futhark they do not need to concern themselves with the low level details of how Futhark parallelizes their code. 
-
+Though this thesis adds 2 backends to the 6 backends already present in the Futhark compiler (4 C backends, and 2 Python backends), the added complexity is relatively modest because of the high degree of reuse of code between the two WASM backends. 
 
 
 \subsection{Implementation Structure}
 
 Below we discuss how to add a new futhark backend that can be invoked from the command line with \texttt{futhark wasm-multicore}. It is structured very similarly to the plain wasm backend described chapter 2. Instead of calling Emscripten on the Sequential C, we apply it to futhark's multicore C backend. We utilize the wasm runtime code written in chapter 2, for the backend and add the necessary Emscripten compiler flags required to enable Multicore WASM. Figure (TBD) illustrates the structure of the WASM multicore implementation.
 
-\begin{verbatim}
-    
-Diagram   
-                                       EMCC
-Futhark src -> Futhark IR -> C           ->                    -> (1.js, 1.wasm)
-                             Multicore C ->                    -> (2.js, 1.wasm)
-                                               SHARED JS CODE
-\end{verbatim}
-
-One of the key differences that can be seen in the figure is that the wasm-multicore backend produes 2 javascript files and 1 Wasm file as opposed to the Sequential Wasm backend which generates 1 JavaScript file and 1 WASM file. The second file is the web worker file, which is used to launch threads that run WASM, allowing for the desired multi-threaded computation.
+\begin{figure}[htbp]
+\centerline{\includegraphics[scale=0.5]{WASM_MC_compiler.png}}
+\caption{WASM-multicore compilation}
+\label{fig:wasm-mc}
+\end{figure}
+One of the key differences that can be seen in the figure \ref{fig:wasm-mc} is that the wasm-multicore backend produces 2 JavaScript files and 1 WASM file as opposed to the Sequential Wasm backend which generates 1 JavaScript file and 1 WASM file. The second JavaScript file is the web worker glue code.
 
 \subsection{Implementation Details}
 Here we discuss the series of steps that were needed complete the implementation.
 \subsubsection{Actions}
-Following the same process as the sequential WASM backend we simply need to define a compile program function that takes the C code generated from the Multicore C backend and
-\subsubsection{Headers}
-Changes to the generated Multicore C
+
+The function \textit{compileMulticoreToWASMAction} contains the plumbing for going from futhark source code to WASM and JavaScript glue code. First it calls \textit{MulticoreWASM.compileProg}. This function take the Futhark source code, and runs the multicore C compiler on the source code, as well as generating the Javascript API code.
+
+TODO: -pthread
+TODO: MulticoreC.compileProg
+
+
+\begin{listing}[H]    
+        \inputminted[fontsize=\small,baselinestretch=0.5,linenos]{haskell}{code/actionmc.hs}
+        \caption{Main file that calls workers which compute prefix sum using shared memory and atomics in parallel}    
+        \label{lst:action-mc}    
+\end{listing}    
+\subsubsection{Multicore C code changes}
+The pthread C code generated by the multicore C backend used platform specific implementations in the generated function \textit{getrusage\_thread} and \textit{num\_processors}. For \textit{getrusage\_thread} it was possible to reuse the linux implementation. For \textit{num\_processors} it was necessary to add an additional implementation for the Emscripten platform. This was simply done by including \textit{emscripten/threading.h} and calling the function \textit{emscripten\_num\_logical\_cores}.
+
+
 
 
 \subsubsection{Emscripten Invocation}
 Emscripten Flags (specific to multicore)
 
 \subsubsection{Running in browser with HTTP}
-Setting HTTP headers
 
 
 \subsection{Benchmark}
