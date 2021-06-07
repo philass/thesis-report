@@ -3,3 +3,6 @@ TODOs
 Coding:
     remove duplicated code in compile prog betweeen Multicore-Futhark and Multicore
 
+
+Writing/coding
+    In chapter 5 Implement prefix sum with pthreads in C and run with emscripten†

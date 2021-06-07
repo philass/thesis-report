@@ -53,17 +53,9 @@ More and more general purpose software runs in the browser and in order to explo
 \newpage
 
 \section{Introduction}
-
 \section{Background}
-
 \section{WASM}
-
-\newpage
-
-
 \section{WASM backend Implementation}
-
-\newpage
 
 
 
@@ -106,7 +98,7 @@ The code in Listing \ref{lst:worker-js} contains the implementation of the worke
 
 
 \begin{figure}[htbp]
-\centerline{\includegraphics[scale=0.75]{integrate_exe_times.png}}
+\centerline{\includegraphics[scale=0.75]{figures/integrate_exe_times.png}}
 \caption{Execution time of Riemann integration for different thread counts. Run on a Macbook Pro with 2,2 GHz 6-Core Intel Core i7}
 \label{png:integrate}
 \end{figure}
@@ -139,16 +131,13 @@ The code in Listing \ref{lst:main-js} spawns 9 worker threads. It sends a messag
         \label{lst:prefixsum-js}    
 \end{listing}    
 
+
+The code in Listing \ref{lst:prefixsum-js} handles the actual execution of prefix sum. In the first pass of the algorithm, each thread calculates the prefix sum of their partition in the array, by calling the function prefix\_sum\_partition. Each thread signals that they are done with their work in the first pass by using the Atomics add, and notify functions. The first thread detects signal has accumulated a response of num\_workers - 1, by using the Atomics function wait. At this point the the first thread calculates the cumulative sums of partitions. At this stage it notifies the other other threads using the Atomics store and notify. At this stage all threads calculate the final prefix\_sum, using the precomputed values. On completion each thread sends a message back to the the main file using the postMessage to indicate they are done. 
+
+
 TODO: Show speed up over one worker vs 9 workers
 
 TODO update code to be cleaner and easier to explain
-
-TODO complete explenation
-The code in Listing \ref{lst:prefixsum-js} handles the actual execution of prefix sum. In the first pass the threads
-
-
-ToDo talk about shared memory paradigm
-TODO talk about Javascript's two paradigms
 
 \subsection{Threaded WebAssembly}
 There is a proposal to extend the WASM specification with support for threads, namely by leveraging web workers, shared memory, and atomics. Chrome and Firefox and Node.js all have experimental support for threaded WASM. Emscripten supports compilation of C/C++ with pthreads to threaded WASM.
@@ -158,7 +147,7 @@ Threaded WASM uses web workers to create and join threads. It doesn't natively i
 A key observation is that WASM does not natively allow for spawning of threads. This is actually taken care of by the runtime or compiler. Specifically for Emscripten, compiling C code written with pthreads will generate three files. It will generate a WASM file, and and two Javascript files. One for the main glue code and other for worker glue code. The glue code takes care of loading the WASM module, populating the memory with the required values, and integrating with the host system as the C code would expect. The C function pthread\_create is translated to Javascript and not WASM. It launches a Javascript Worker, passing it a shared array buffer and the wasm module that it should run. The WASM simply needs the shared array buffer and atomics to synchronize.  
 
 \begin{figure}[htbp]
-\centerline{\includegraphics[scale=0.5]{UML_threaded_wasm.png}}
+\centerline{\includegraphics[scale=0.5]{figures/UML_threaded_wasm.png}}
 \caption{UML diagram showing flow of execution of threaded programs in WASM}
 \label{uml}
 \end{figure}
@@ -189,7 +178,7 @@ Though this thesis adds 2 backends to the 6 backends already present in the Futh
 Below we discuss how to add a new futhark backend that can be invoked from the command line with \texttt{futhark wasm-multicore}. It is structured very similarly to the plain wasm backend described chapter 2. Instead of calling Emscripten on the Sequential C, we apply it to futhark's multicore C backend. We utilize the wasm runtime code written in chapter 2, for the backend and add the necessary Emscripten compiler flags required to enable Multicore WASM. Figure (TBD) illustrates the structure of the WASM multicore implementation.
 
 \begin{figure}[htbp]
-\centerline{\includegraphics[scale=0.5]{WASM_MC_compiler.png}}
+\centerline{\includegraphics[scale=0.5]{figures/WASM_MC_compiler.png}}
 \caption{WASM-multicore compilation}
 \label{fig:wasm-mc}
 \end{figure}
@@ -201,8 +190,7 @@ Here we discuss the series of steps that were needed complete the implementation
 
 The function \textit{compileMulticoreToWASMAction} contains the plumbing for going from futhark source code to WASM and JavaScript glue code. First it calls \textit{MulticoreWASM.compileProg}. This function take the Futhark source code, and runs the multicore C compiler on the source code, as well as generating the Javascript API code.
 
-TODO: -pthread
-TODO: MulticoreC.compileProg
+\textit{MulticoreWASM.compileProg} simply combines the multicore C compiler with the JavaScript code generation discussed in chapter 4, by calling the respective functions that contain the meat of the logic, which have already been developed. The last thing of note is that the flag \textit{-pthread} is passed to \textit{runEMCC}. This flag lets Emcc know that our C code contains pthreads, and thereby compiles it correctly.
 
 
 \begin{listing}[H]    
@@ -217,9 +205,15 @@ The pthread C code generated by the multicore C backend used platform specific i
 
 
 \subsubsection{Emscripten Invocation}
-Emscripten Flags (specific to multicore)
+
+The generated multicore C code uses the POSIX function \textit{pthread\_create}. Emscripten aims to follow the POSIX standard closely, but in some places has slightly different behaviour. This is the case for \textit{pthread\_create}, which is a function that is used in the generated multicore C code. 
+
+When pthread\_create() is called, if we need to create a new Web Worker, then that requires returning the main event loop. That is, you cannot call pthread\_create and then keep running code synchronously that expects the worker to start running - it will only run after you return to the event loop (TODO cite pthread docs). In order to work around the API differences, the compiler flag \textit{PTHREAD\_POOL\_SIZE=<integer} needs to be passed to the Emscripten compiler. This effectively creates the web workers before the main thread is called, in which case create\_pthread can just use an already spawned web worker. From testing, this parameter is best tuned by setting it to the number of logical\_cores as the amount of threads can be run in parallel are determined by the number we set for the pthread pool size. 
+
+
 
 \subsubsection{Running in browser with HTTP}
+
 
 
 \subsection{Benchmark}
