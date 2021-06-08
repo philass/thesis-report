@@ -6,3 +6,14 @@ Coding:
 
 Writing/coding
     In chapter 5 Implement prefix sum with pthreads in C and run with emscripten†
+
+
+
+
+Coding:
+ Add miliseconds granularity to the get_wall_time for emscripten using get_now
+
+
+Coding/Report:
+ Add ray tracing
+
