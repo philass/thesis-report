@@ -44,7 +44,8 @@
 %% Write your dissertation here.
 
 \begin{abstract}
-More and more general purpose software runs in the browser and in order to exploit advances in parallel processing capabilities of modern computer hardware it is advantageous to invoke parallel programming in the browser, and do it with a high level programming language without the need for domain knowledge, memory safety, etc.
+Futhark is a High-performance purely functional data-parallel array programming language targeting parallel compute hardware. Futhark has backends for several  compute architectures  and this thesis adds browsers because large percentage of toady's software is run in the browser, and the underlying hardware of the laptops and mobile phones that run these browser has increasingly parallel compute with GPU's and multicore CPU's. As such there are heavy development of standardized cross browser Web API's to harness these parallel architectures. One of these technologies is threaded WASM. This thesis develops a WASM and threaded WASM backend for the Futhark programming languages, leveraging both parallel computing and browsers as a target architecture.  
+
 \end{abstract}
 
 
@@ -52,9 +53,80 @@ More and more general purpose software runs in the browser and in order to explo
 \tableofcontents
 \newpage
 
+
+
 \section{Introduction}
+
+\subsection{Thesis Structure}
+\begin{itemize}
+    \item Chapter 2, Background:
+    Overview of the related work that this thesis builds on.
+    \item Chapter 3, WASM:
+    Explanation and analysis of WASM as a programming language and as a target language for the browser. 
+    
+    \item Chapter 4, WASM  Backend Implementation:
+     Description of the implementation of the WASM backend. As well as a overview of the performance bench-marked against the native C backend.
+    
+    \item Chapter 5, Parallel Compute in the Browser:
+    Analysis of the facilities and paradigms for parallel programming in the browser through JavaScript and WASM. 
+    
+    \item Chapter 6, WASM Multicore Backend Implementation:
+    Description of the implementation of the multicore WASM backend. As well as a overview of the performance benchmarked against the native multicore C, and WASM backend developed in Chapter 4.
+    
+    \item Chapter 7, Conclusion:
+    Summary of the implementations and performance of the backends developed. As well as a brief discussion of future developments for Futhark targeting parallel compute in the browser.
+    
+\end{itemize}
+
 \section{Background}
+
+TODO litter section with citations
+
+%\subsection{Futhark}
+
+TODO Futhark (C, POXIS threads backend)
+
+
+%\subsection{Browsers}
+
+The first web browsers started as Graphical User Interfaces for rendering static web pages. Web Browsers have evolved to keep up with the high paced innovation in web technologies and with modern day browsers having strong similarities with full blown operating systems. 
+
+
+%\subsubsection{JavaScript}
+JavaScript for a long period of time was the only supported programming language for the browser. As such it became one of the largest programming languages in the world. With browsers being one of the most ubiquitous coding platforms, programmers were restricted to JavaScript for any functionality in their websites that run client side. As a result many languages added backends to target JavaScript to that programmers could write code in their respective languages and generate JavaScript that would run in the browser. The problem is that JavaScript is not a particularly good target language, as it was not designed with this use case in mind. 
+
+In the early days of web browsers, web pages would render differently across browsers as there was no standardization's for web API's. Different browsers supported different programming languages, creating big headaches for programmers, who wanted their websites to render identically across browsers.. One of the first popular languages for the browser was JavaScript. Eventually the big vendors converged on JavaScript releasing the standardized version ECMAScript. 
+
+Huge investments have been made to increase the execution speed of JavaScript in the browser. With Google and Mozilla investing heavily into the V8 JavaScript engine and SpyderMonkey, (Add Safari and maybe Opera) respectively. Many approaches have been taken to make JavaScript faster. However they have all been fundamentally limited by the language design. 
+
+%\subsubsection{ASM.js}
+
+One of the approaches taken by the browser vendors was to define a subset of the language asm.js and a convention for type hints, which were designed for efficient execution by leveraging types and compiler tricks to allow ahead of time compilation. It was intended as a target language for compilation of statically typed programming languages. Emscripten was developed to be a C/C++ to asm.js compiler, utilizing the LLVM toolchain. 
+
+%\subsubsection{WASM}
+The major browser vendors collaboratively designed WASM to more comprehensively address the limitations of JavaScript as a target language for the web. It is a portable low level byte code, designed for compact representation, efficient compilation, and near native execution speeds. WASM is gaining adoption and has been used for a variety of applications (TODO: Google Earth and TensorFlow) especially as a target for compilation from C, C++ and Rust. The portability and execution speed have also led to adoption beyond browsers with use cases ranging from (TODO: DFinity and Edge computing). 
+
+%\subsubsection{LLVM}
+One of the technologies that has greatly helped the adoption of WASM as a target language is the LLVM compiler tool chain. Writing a full compiler from scratch that supports multiple targets is an incredibly time consuming process. In order to have high performance backends for different target architectures such x86 and ARM requires knowledge of many of the low level details of each respective target. An alternative approach is for the Compiler frontend of the source language to take the source code and translate it to the LLVM internal representation. As the LLVM compiler tool-chain can then generate high performance code on all the most common computer architectures. 
+
+
+Many languages now support WASM as target language, either as a backend target from their main compiler or through another compiler implementation. Languages that generate LLVM IR have any easy path to WASM code generation. Many of the biggest languages are currently built with or have compiler implementations using LLVM.
+
+While WASM has progressed the state of the art of single threaded computation speed in browsers an other avenue for execution speed is parallelism. Browsers have facilities for parallel programming. Javascript supports two different paradigms. Web  workers  and  message  passing  enable  parallel  programming  without  shared  memory. SharedArrayBuffer and atomics enable shared memory multithreading with thread synchronization.  There is a threaded WASM proposal that adds atomic operations to the language, and adds support for SharedArrayBuffers while relying on JavaScript’s web workers to create and join threads. 
+
+TODO mention GPU API's for the browser
+
+
+
+
+
+
+
+
 \section{WASM}
+
+
+
 \section{WASM backend Implementation}
 
 
@@ -62,6 +134,7 @@ More and more general purpose software runs in the browser and in order to explo
 
 
 \section{Parallel Execution in the Browser}
+
 
 Browsers have facilities for parallel programming. Javascript supports two different paradigms. Web workers and message passing enable parallel programming without shared memory. SharedArrayBuffer and atomics enable shared memory multithreading with thread synchronization. There is a threaded WASM proposal that adds atomic operations to the language, and adds support for SharedArrayBuffers while relying on JavaScript's web workers to create and join threads. This chapter introduces all these concepts and illustrates them with examples.
 
@@ -165,6 +238,8 @@ The UML diagram in figure \ref{uml} demonstrates the execution flow of a paralle
 \newpage
 
 \section{WASM Multicore Backend}
+The benchmarks in this section compares Tensorflow and Futhark performance on the
+two networks used in the accuracy test, but the benchmark only include the training part of the program
 
 This chapter details the extensions that are added to the Futhark compiler to support a multicore WASM backend. It also benchmarks the generated WASM-multicore code against the sequential WASM backend. It also compares the multicore C backend against the WASM-multicore backend running in the browser.
 

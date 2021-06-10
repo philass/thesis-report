@@ -5,25 +5,29 @@ Introduction
 
 A programming language in the Browswer:
 
+ - Small intro to web browsers
+
   - Javascript
    -- Why it was invented
    -- Its sticking power
    -- Advances
        - v8
        - asm.js
+
+
    -- fundemental language shortages
       - garbage collection
       - bad target language
-
-  - WASM
+  
+  - WASM 
    -- How it addresses the shortages of Javascript
        -- Low level, runs everywhere
        -- Built in support from compiler toolchains
        -- Shared support from the browser
    -- Easiest way to use it in the browser
 
-  FUthark
-    -- in the browser
+
+   LLVM helping with WASM adoption through LLVM IR
     
 
 
