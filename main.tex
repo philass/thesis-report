@@ -75,9 +75,7 @@ Futhark is a High-performance purely functional data-parallel array programming 
 
 
 
-\newpage
 \tableofcontents
-\newpage
 
 
 
@@ -104,7 +102,7 @@ Futhark is a High-performance purely functional data-parallel array programming 
     
 \end{itemize}
 
- \chapter{Background}
+\chapter{Background}
 
 TODO litter section with citations
 
@@ -169,19 +167,18 @@ The most used WASM backends, namely Rust and C/C++ use LLVM to generate WASM cod
     \item Emscripten: Emscripten can simply take C source code generated from the Futhark compiler. This approach would require the least modifications to the compiler. Futhark also aims to emit high performance C code, and Emscripten aims to translate C to high performance WASM code. Connecting the two compiler's together is the approach that is most logical given the current tooling of the futhark compiler.
 \end{itemize}
 
-
-
 Conveniently the Emscripten compiler is a full fledged production ready C and C++ to WASM compiler, used by the likes of Google, and Mozilla. In order to test the viability of taking generated C source code and passing it through the Emscripten compiler, some exploratory testing was necessary.
 
 The simplest Futhark program takes no arguments and simply returns a constant. 
-\begin{verbatim}
-    let main = 1i32
-\end{verbatim}
-However when this code compiles to C. it generates over 2200 lines of code. This is because it contains logic for option parsing, and a fair deal of boiler plate code. Before going farther with the Emscripten compiler it is a worth while experiment to see what modifications have to be made to the generated C code before it can be accepted by the Emscripten compiler. One issue was in platform specific code used for timing, however on furth inspection it turned out that this code was a relic and not actually used anywhere in the compiler, and therefor could just be deleted. Listing \ref{lst:int128-1} gives the other function implementation that Emscripten can't compile.
+
+\begin{minted}{Haskell}
+let main = 1i32
+\end{minted}
+
+However when this code compiles to C. it generates over 2200 lines of code. This is because it contains logic for option parsing, and a fair deal of boiler plate code. Before going farther with the Emscripten compiler it is a worth while experiment to see what modifications have to be made to the generated C code before it can be accepted by the Emscripten compiler. One issue was in platform specific code used for timing, however on further inspection it turned out that this code was a relic and not actually used anywhere in the compiler, and therefor could just be deleted. Listing \ref{lst:int128} gives the other function implementation that Emscripten can't compile.
 \begin{listing}[H] 
         \inputminted[fontsize=\small,baselinestretch=0.5,linenos]{C}{code/compiler/int128_c.c}
-
-        \label{lst:int128-1}    
+        \label{lst:int128}    
 \end{listing} 
 
 The issue is that Emscripten and WASM don't support \textit{uint128} types. Instead an alternatate implementation for calculating the high order bits of 64 bit multiplication, that doesn't cast to \textit{uint128} numbers is used. 
@@ -192,31 +189,30 @@ The issue is that Emscripten and WASM don't support \textit{uint128} types. Inst
         \label{lst:integrate-js}    
 \end{listing} 
 
+
 Surprisingly after making this modification to the generated code compiling futhark to C and than the C with Emscripten gives working code. With the small modifications described to get the generated C to a state where it can be compiled with the Emscripten compiler, a programmer with familiar with the semantics of the Emscripten heap has a workable WASM library. This involves keeping track of the pointers on the Emscripten heap, by passing them into the appropriate functions. However working with pointers in JavaScript is both not idiomatic and not safe. For Futhark to be practical the implementation details of the raw pointers to the heap should be extracted away, and should be shielded by a layer of abstraction.
+Below is a simple futhark program for calculating the sum of rows in a matrix. 
 
+\begin{listing}[H] 
+        \inputminted[fontsize=\small,baselinestretch=0.5,linenos]{haskell}{code/compiler/c-backend/main.fut}
+        \caption{Simple futhark row sum program}
+        \label{lst:futhark-capi}   
 
+\end{listing} 
 
+Though this program is very simple. It accepts a 2d matrix of i32 numbers, and returns an array of i32. However the machinery for working with this in C is a little bit clunky. The code below shows how this program would be called from C.
 
-\subsection{Runtime}
+\begin{listing}[H] 
+        \inputminted[fontsize=\small,baselinestretch=0.5,linenos]{C}{code/compiler/c-backend/example.c}
+        \label{lst:capi}    
+\end{listing} 
 
+Firstly a Futhark config and context must be initialized. The second important observation is that any array or matrix type must first be converted to an equivalent Futhark type before it can be used as an argument to one of Futhark's entry point functions. Similarly, any array or matrix type returned by Futhark must be converted back into C types by using Futhark library functions. C does not have an easy use to use standard representation of multi-dimensional arrays. JavaScript also doesn't have a good notion of multidimensional arrays. Where as for Python it can leverage the numpy ecosystem. 
 
-For the following progra
+\section{Runtime}
+For the runtime sytem, two classes are introduced. One of the classes ArrayWrapper, wraps Futhark arrays that are allocated on the heap. The ArrayWrapper class has properties and methods for getting the dimension, and getting the underlying JavaScript array that corresponds to its data. The other class that we include in our runtime system wraps the futhark context, and provides the library functions for going to futhark types, and calling futhark functions. This way the API doesn't expose pointers to the user in the API. 
 
-
-Instead of returning pointers to and from functions, it would be preferable to have a class that encapsulated these low level details. A FutharkValue class is introduced, as well as helper functions, which accept normal JavaScript types, or FutharkValue types, and return FutharkValue types. 
-
-
-
-
-
-
-There are a few key advantages in defining a class to handle the Futhark specific types. Firstly the Futhark value types don't map well to JavaScript types. Emscripten only supports 
-
-
-
-
-
-
+For listing \ref{lst:futhark-capi} the JavaScript class FutharkContext defines the following functions.
 
 
 
@@ -224,9 +220,7 @@ There are a few key advantages in defining a class to handle the Futhark specifi
 
 
 
-
-
-One important implementation observation is that the API only depends on 3 things. The name of Futhark's C library functions, these functions return types and these functions arguments types. 
+When putting all these pieces together and adding the modifications in the compiler an important implementation observation is that the API only depends on 3 things. The name of Futhark's C library functions, these functions return types and these functions arguments types. This greatly simplifies the implementation. Firstly Futhark's C api is a part of the compiler that is most stable. This means that only depending on this part of the futhark compiler to generate JavaScript code .. TODO say something about this. 
 
 
 
@@ -242,19 +236,24 @@ Figure \ref{fig:wasm} illustrates the logical flow of the compilation of the WAS
 
 
 
-
+One of the applications for high performance computing in the browser is graphics. Figure \ref{fig:mandelbrot} illustrates a Futhark program running in the browser for visualizing the mandelbrot set. 
 
 
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=\textwidth]{figures/mandelbrot.png}
+    \includegraphics[scale=0.2]{figures/mandelbrot.png}
     \caption{Caption}
     \label{fig:mandelbrot}
 \end{figure}
 
+The only Futhark specific code required in to get the values to render is given below. The code is easy to call, and clearly hides the underlying pointers that are being passed around from the programmer.
 
-
+\begin{minted}{javascript}
+var fc = new FutharkContext();
+var result = fc.main(screenX, screenY, depth, xmin, ymin, xmax, ymax);
+var vals = result[0].values();
+\end{minted}
 
 
 \chapter{Parallel Execution in the Browser}
@@ -300,7 +299,7 @@ The code in Listing \ref{lst:worker-js} contains the implementation of the worke
 \label{png:integrate}
 \end{figure}
 
-The code execution time in \ref{png:integrate} is for the Reimann integral computed with one billion sample values. For one worker thread the execution time was 11.11 seconds. For two threads the execution time was 6.8 seconds, which is nearly double as fast. However as the number of threads increases the increase in execution speed tapers off. Going from 8 to 12 cores only yields a marginal increase in execution speed going from 2.45 second to 2.39. Once more than twelve worker threads are exceeded, there is no longer a marginal increase in speedup. This can be attributed to the physical limitation of threads on the hardware the code was exectuted on. The number of logical cores on the computer that executed this code was 12, meaning that any additional web worker launched after the initial 12 must wait on the thread pool for another to finish before it can be activated. In which case the overhead of launching it is only detrimental to the complete execution time of the program
+The code execution time in \ref{png:integrate} is for the Reimann integral computed with one billion sample values. For one worker thread the execution time was 11.11 seconds. For two threads the execution time was 6.8 seconds, which is nearly double as fast. However as the number of threads increases the increase in execution speed tapers off. Going from 8 to 12 cores only yields a marginal increase in execution speed going from 2.45 second to 2.39. Once more than twelve worker threads are exceeded, there is no longer a marginal increase in speedup. This can be attributed to the physical limitation of threads on the hardware the code was executed on. The number of logical cores on the computer that executed this code was 12, meaning that any additional web worker launched after the initial 12 must wait on the thread pool for another to finish before it can be activated. In which case the overhead of launching it is only detrimental to the complete execution time of the program
 
 
 \section{Shared Memory and Atomics}
@@ -317,7 +316,6 @@ To illustrate shared memory and atomics the following example is an implementati
         \caption{Main file that calls workers which compute prefix sum using shared memory and atomics in parallel}    
         \label{lst:main-js}    
 \end{listing}    
-
 The code in Listing \ref{lst:main-js} spawns 9 worker threads. It sends a message to each of the threads with parameters, some of which are shared array buffers. This allows each of the threads to have access to shared memory. When each thread has sent a message to indicate completion, the final result of prefix sum is logged to the console.
 
 %\captionof{listing}{Example of a worker working}
@@ -342,7 +340,7 @@ Threaded WASM uses web workers to create and join threads. It doesn't natively i
 
 A key observation is that WASM does not natively allow for spawning of threads. This is actually taken care of by the runtime or compiler. Specifically for Emscripten, compiling C code written with pthreads will generate three files. It will generate a WASM file, and and two Javascript files. One for the main glue code and other for worker glue code. The glue code takes care of loading the WASM module, populating the memory with the required values, and integrating with the host system as the C code would expect. The C function pthread\_create is translated to Javascript and not WASM. It launches a Javascript Worker, passing it a shared array buffer and the wasm module that it should run. The WASM simply needs the shared array buffer and atomics to synchronize.  
 
-\begin{figure}[htbp]
+\begin{figure}[htb]
 \centerline{\includegraphics[width=\textwidth]{figures/UML_threaded_wasm.png}}
 \caption{UML diagram showing flow of execution of threaded programs in WASM}
 \label{uml}
@@ -377,7 +375,7 @@ Below we discuss how to add a new futhark backend that can be invoked from the c
 
 \begin{figure}[htbp]
 \centerline{\includegraphics[width=\textwidth]{figures/WASM_MC_compiler.png}}
-\caption{WASM-multicore compilation}
+    \caption{WASM-multicore compilation}
 \label{fig:wasm-mc}
 \end{figure}
 One of the key differences that can be seen in the figure \ref{fig:wasm-mc} is that the wasm-multicore backend produces 2 JavaScript files and 1 WASM file as opposed to the Sequential Wasm backend which generates 1 JavaScript file and 1 WASM file. The second JavaScript file is the web worker glue code.
