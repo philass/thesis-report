@@ -1,0 +1,32 @@
+%!TEX root = ../main.tex
+
+\documentclass[11pt]{book}
+\usepackage[a4paper, hmargin={4cm, 4cm}]{geometry}
+\usepackage{eso-pic}
+\usepackage{graphicx} 
+\usepackage{minted}
+\usepackage{listings}                 
+\usepackage{caption}
+\usepackage{parcolumns}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[RO, LE]{\thepage}
+\fancyhead[LO]{\textsl{\leftmark}}
+\fancyhead[RE]{\textsl{\rightmark}}
+\renewcommand{\sectionmark}[1]{%
+\markright{\thesection \ #1}{}}
+
+\renewcommand{\chaptermark}[1]{%
+\markboth{\thechapter \ #1}{}}
+
+\titleformat{\chapter}[display]
+  {\normalsize \huge  \color{black}}%
+  {\flushleft\normalsize %
+   \MakeUppercase{\fontfamily{}\fontsize{24}{24}\selectfont\chaptertitlename}\hspace{2ex}%
+   {\fontfamily{}\fontsize{40}{40}\selectfont\thechapter}}%
+  {10 pt}%
+  {\hrule\vspace{10pt}\raggedleft\bfseries\huge}%
+
