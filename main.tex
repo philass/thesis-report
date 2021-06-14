@@ -1,10 +1,34 @@
-\documentclass[11pt]{article}
-\usepackage[a4paper, hmargin={2.8cm, 2.8cm}, vmargin={2.5cm, 2.5cm}]{geometry}
+\documentclass[11pt]{book}
+\usepackage[a4paper, hmargin={4cm, 4cm}]{geometry}
 \usepackage{eso-pic} % \AddToShipoutPicture
 \usepackage{graphicx} % \includegraphics
 \usepackage{minted}
 \usepackage{listings}                 % Source code printer for LaTeX
 \usepackage{caption}
+\usepackage{parcolumns}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[RO, LE]{\thepage}
+\fancyhead[LO]{\textsl{\leftmark}}
+\fancyhead[RE]{\textsl{\rightmark}}
+
+\renewcommand{\sectionmark}[1]{%
+\markright{\thesection \ #1}{}}
+
+\renewcommand{\chaptermark}[1]{%
+\markboth{\thechapter \ #1}{}}
+
+\titleformat{\chapter}[display]
+  {\normalsize \huge  \color{black}}%
+  {\flushleft\normalsize %
+   \MakeUppercase{\fontfamily{}\fontsize{24}{24}\selectfont\chaptertitlename}\hspace{2ex}%
+   {\fontfamily{}\fontsize{40}{40}\selectfont\thechapter}}%
+  {10 pt}%
+  {\hrule\vspace{10pt}\raggedleft\bfseries\huge}%
+
 
 %% Change `ku-farve` to `nat-farve` to use SCIENCE's old colors or
 %% `natbio-farve` to use SCIENCE's new colors and logo.
@@ -28,6 +52,8 @@
     \today
 }
 
+
+
 \begin{document}
 
 
@@ -40,13 +66,13 @@
 \thispagestyle{empty}
 
 \newpage
+\begin{center}
+    \textbf{Abstract}
+\end{center}
 
-%% Write your dissertation here.
-
-\begin{abstract}
 Futhark is a High-performance purely functional data-parallel array programming language targeting parallel compute hardware. Futhark has backends for several  compute architectures  and this thesis adds browsers because large percentage of toady's software is run in the browser, and the underlying hardware of the laptops and mobile phones that run these browser has increasingly parallel compute with GPU's and multicore CPU's. As such there are heavy development of standardized cross browser Web API's to harness these parallel architectures. One of these technologies is threaded WASM. This thesis develops a WASM and threaded WASM backend for the Futhark programming languages, leveraging both parallel computing and browsers as a target architecture.  
 
-\end{abstract}
+
 
 
 \newpage
@@ -55,9 +81,9 @@ Futhark is a High-performance purely functional data-parallel array programming 
 
 
 
-\section{Introduction}
+\chapter{Introduction}
 
-\subsection{Thesis Structure}
+\section{Thesis Structure}
 \begin{itemize}
     \item Chapter 2, Background:
     Overview of the related work that this thesis builds on.
@@ -78,35 +104,35 @@ Futhark is a High-performance purely functional data-parallel array programming 
     
 \end{itemize}
 
-\section{Background}
+ \chapter{Background}
 
 TODO litter section with citations
 
-%\subsection{Futhark}
+%\section{Futhark}
 
 TODO Futhark (C, POXIS threads backend)
 
 
-%\subsection{Browsers}
+%\section{Browsers}
 
 The first web browsers started as Graphical User Interfaces for rendering static web pages. Web Browsers have evolved to keep up with the high paced innovation in web technologies and with modern day browsers having strong similarities with full blown operating systems. 
 
 
-%\subsubsection{JavaScript}
+%\subsection{JavaScript}
 JavaScript for a long period of time was the only supported programming language for the browser. As such it became one of the largest programming languages in the world. With browsers being one of the most ubiquitous coding platforms, programmers were restricted to JavaScript for any functionality in their websites that run client side. As a result many languages added backends to target JavaScript to that programmers could write code in their respective languages and generate JavaScript that would run in the browser. The problem is that JavaScript is not a particularly good target language, as it was not designed with this use case in mind. 
 
 In the early days of web browsers, web pages would render differently across browsers as there was no standardization's for web API's. Different browsers supported different programming languages, creating big headaches for programmers, who wanted their websites to render identically across browsers.. One of the first popular languages for the browser was JavaScript. Eventually the big vendors converged on JavaScript releasing the standardized version ECMAScript. 
 
 Huge investments have been made to increase the execution speed of JavaScript in the browser. With Google and Mozilla investing heavily into the V8 JavaScript engine and SpyderMonkey, (Add Safari and maybe Opera) respectively. Many approaches have been taken to make JavaScript faster. However they have all been fundamentally limited by the language design. 
 
-%\subsubsection{ASM.js}
+%\subsection{ASM.js}
 
 One of the approaches taken by the browser vendors was to define a subset of the language asm.js and a convention for type hints, which were designed for efficient execution by leveraging types and compiler tricks to allow ahead of time compilation. It was intended as a target language for compilation of statically typed programming languages. Emscripten was developed to be a C/C++ to asm.js compiler, utilizing the LLVM toolchain. 
 
-%\subsubsection{WASM}
+%\subsection{WASM}
 The major browser vendors collaboratively designed WASM to more comprehensively address the limitations of JavaScript as a target language for the web. It is a portable low level byte code, designed for compact representation, efficient compilation, and near native execution speeds. WASM is gaining adoption and has been used for a variety of applications (TODO: Google Earth and TensorFlow) especially as a target for compilation from C, C++ and Rust. The portability and execution speed have also led to adoption beyond browsers with use cases ranging from (TODO: DFinity and Edge computing). 
 
-%\subsubsection{LLVM}
+%\subsection{LLVM}
 One of the technologies that has greatly helped the adoption of WASM as a target language is the LLVM compiler tool chain. Writing a full compiler from scratch that supports multiple targets is an incredibly time consuming process. In order to have high performance backends for different target architectures such x86 and ARM requires knowledge of many of the low level details of each respective target. An alternative approach is for the Compiler frontend of the source language to take the source code and translate it to the LLVM internal representation. As the LLVM compiler tool-chain can then generate high performance code on all the most common computer architectures. 
 
 
@@ -123,17 +149,115 @@ TODO mention GPU API's for the browser
 
 
 
-\section{WASM}
+\chapter{WASM}
 
 
 
-\section{WASM backend Implementation}
+\chapter{WASM backend Implementation}
+
+This chapter discusses the implementation of the initial WASM backend. It discusses the design choices made with considerations to code maintenance, performance, and practical usability. 
+
+
+
+
+The most used WASM backends, namely Rust and C/C++ use LLVM to generate WASM code. The reason they are able to do this successfully is because the languages already have compiler frontends that go from the source language to the LLVM IR. With respect to the Futhark compiler, instead of emitting a standard compiler intermediate representation, it elects to generate C code that can in turn be compiled with any standard C compiler. This has the advantage of portability in the sense that it doesn't depend on LLVM which doesn't come standard on all Windows, and Linux distributions. Emscripten provides the facilities for going from C source code to WASM. The alternative to generating LLVM IR for it to produce WASM and using the Emscripten compiler on the generated C source code, is to generate the WASM by hand. These three choices will be discussed briefly.
+
+\begin{itemize}
+    \item WASM by hand: 
+        WASM by hand is by far the least attractive of all the options. Writing low level code is both incredibly time consuming it is also inefficient, in the sense that it would be nearly impossible to capture enough of the  
+    \item LLVM IR: This is the most standard approach among compilers. However since Futhark doesn't already generate LLVM IR utilizing this approach would effectively require a redesign of the compiler architecture. This would be an interesting project, with possible positive implications in more places than just a WASM backend. However this would be quite a large task, as the Futhark frontend wasn't designed with this specific intermediate representation in mind. 
+    \item Emscripten: Emscripten can simply take C source code generated from the Futhark compiler. This approach would require the least modifications to the compiler. Futhark also aims to emit high performance C code, and Emscripten aims to translate C to high performance WASM code. Connecting the two compiler's together is the approach that is most logical given the current tooling of the futhark compiler.
+\end{itemize}
+
+
+
+Conveniently the Emscripten compiler is a full fledged production ready C and C++ to WASM compiler, used by the likes of Google, and Mozilla. In order to test the viability of taking generated C source code and passing it through the Emscripten compiler, some exploratory testing was necessary.
+
+The simplest Futhark program takes no arguments and simply returns a constant. 
+\begin{verbatim}
+    let main = 1i32
+\end{verbatim}
+However when this code compiles to C. it generates over 2200 lines of code. This is because it contains logic for option parsing, and a fair deal of boiler plate code. Before going farther with the Emscripten compiler it is a worth while experiment to see what modifications have to be made to the generated C code before it can be accepted by the Emscripten compiler. One issue was in platform specific code used for timing, however on furth inspection it turned out that this code was a relic and not actually used anywhere in the compiler, and therefor could just be deleted. Listing \ref{lst:int128-1} gives the other function implementation that Emscripten can't compile.
+\begin{listing}[H] 
+        \inputminted[fontsize=\small,baselinestretch=0.5,linenos]{C}{code/compiler/int128_c.c}
+
+        \label{lst:int128-1}    
+\end{listing} 
+
+The issue is that Emscripten and WASM don't support \textit{uint128} types. Instead an alternatate implementation for calculating the high order bits of 64 bit multiplication, that doesn't cast to \textit{uint128} numbers is used. 
+
+\begin{listing}[H] 
+        \inputminted[fontsize=\small,baselinestretch=0.5,linenos]{C}{code/compiler/int128_wasm.c}
+
+        \label{lst:integrate-js}    
+\end{listing} 
+
+Surprisingly after making this modification to the generated code compiling futhark to C and than the C with Emscripten gives working code. With the small modifications described to get the generated C to a state where it can be compiled with the Emscripten compiler, a programmer with familiar with the semantics of the Emscripten heap has a workable WASM library. This involves keeping track of the pointers on the Emscripten heap, by passing them into the appropriate functions. However working with pointers in JavaScript is both not idiomatic and not safe. For Futhark to be practical the implementation details of the raw pointers to the heap should be extracted away, and should be shielded by a layer of abstraction.
+
+
+
+
+\subsection{Runtime}
 
 
 
 
 
-\section{Parallel Execution in the Browser}
+Instead of returning pointers to and from functions, it would be preferable to have a class that encapsulated these low level details. A FutharkValue class is introduced, as well as helper functions, which accept normal JavaScript types, or FutharkValue types, and return FutharkValue types. 
+
+
+
+
+
+
+There are a few key advantages in defining a class to handle the Futhark specific types. Firstly the Futhark value types don't map well to JavaScript types. Emscripten only supports 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+One important implementation observation is that the API only depends on 3 things. The name of Futhark's C library functions, these functions return types and these functions arguments types. 
+
+
+
+Figure \ref{fig:wasm} illustrates the logical flow of the compilation of the WASM backend. 
+
+\begin{figure}[htbp]
+\centerline{\includegraphics[width=\textwidth]{figures/WASM_MC_compiler.png}}
+\caption{WASM-multicore compilation}
+\label{fig:wasm}
+\end{figure}
+
+
+
+
+
+
+
+
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{figures/mandelbrot.png}
+    \caption{Caption}
+    \label{fig:mandelbrot}
+\end{figure}
+
+
+
+
+
+\chapter{Parallel Execution in the Browser}
 
 
 Browsers have facilities for parallel programming. Javascript supports two different paradigms. Web workers and message passing enable parallel programming without shared memory. SharedArrayBuffer and atomics enable shared memory multithreading with thread synchronization. There is a threaded WASM proposal that adds atomic operations to the language, and adds support for SharedArrayBuffers while relying on JavaScript's web workers to create and join threads. This chapter introduces all these concepts and illustrates them with examples.
@@ -143,7 +267,7 @@ JavaScript is single threaded. Meaning it consists of a single call stack and a 
 %There are three primitives used for doing multithreaded programming in the browser: Web Workers, Shared Memory, and Atomics. These features will be introduced in this section along with examples illustrating how they are used in practice. 
 
 
-\subsection{Web Workers}
+\section{Web Workers}
 Parallelism with JavaScript in browsers is achieved through web workers. Web workers are extra threads of execution beyond the main thread. The threads interact via message passing. Typically messages are passed through the postMessage and onmessage. postMessage is used to send a message between threads and onmessage works as an event handler to receive messages from threads. 
 
 
@@ -170,8 +294,8 @@ The code in Listing \ref{lst:worker-js} contains the implementation of the worke
 
 
 
-\begin{figure}[htbp]
-\centerline{\includegraphics[scale=0.75]{figures/integrate_exe_times.png}}
+\begin{figure}[H]
+\centerline{\includegraphics[width=\textwidth]{figures/integrate_exe_times.png}}
 \caption{Execution time of Riemann integration for different thread counts. Run on a Macbook Pro with 2,2 GHz 6-Core Intel Core i7}
 \label{png:integrate}
 \end{figure}
@@ -179,10 +303,9 @@ The code in Listing \ref{lst:worker-js} contains the implementation of the worke
 The code execution time in \ref{png:integrate} is for the Reimann integral computed with one billion sample values. For one worker thread the execution time was 11.11 seconds. For two threads the execution time was 6.8 seconds, which is nearly double as fast. However as the number of threads increases the increase in execution speed tapers off. Going from 8 to 12 cores only yields a marginal increase in execution speed going from 2.45 second to 2.39. Once more than twelve worker threads are exceeded, there is no longer a marginal increase in speedup. This can be attributed to the physical limitation of threads on the hardware the code was exectuted on. The number of logical cores on the computer that executed this code was 12, meaning that any additional web worker launched after the initial 12 must wait on the thread pool for another to finish before it can be activated. In which case the overhead of launching it is only detrimental to the complete execution time of the program
 
 
-\subsection{Shared Memory and Atomics}
+\section{Shared Memory and Atomics}
 
 Web workers with message passing have some similarities in how parallelism is executed with the Erlang programming language. Both of which use message passing to coordinate parallel execution. However many other programming languages and libraries also support and utilize shared memory. An example of this is C/C++ and POSIX threads. Shared memory maps closely to modern multicore hardware, and is faster for certain workloads (TODO GIVE EXAMPLE). However it comes at the cost of a new set of bugs in the shape of data races, which is why languages such as Erlang and Futhark itself abstracts the construct away from the programmer.
-
 
 JavaScript also offers shared memory through SharedArrayBuffers. A SharedArrayBuffer points to a piece of linear memory. The SharedArrayBuffer can be passed to multiple web workers who can access the memory in parallel. 
 
@@ -212,7 +335,7 @@ The code in Listing \ref{lst:prefixsum-js} handles the actual execution of prefi
 
 %TODO update code to be cleaner and easier to explain
 
-\subsection{Threaded WebAssembly}
+\section{Threaded WebAssembly}
 There is a proposal to extend the WASM specification with support for threads, namely by leveraging web workers, shared memory, and atomics. Chrome and Firefox and Node.js all have experimental support for threaded WASM. Emscripten supports compilation of C/C++ with pthreads to threaded WASM.
 
 Threaded WASM uses web workers to create and join threads. It doesn't natively invoke web workers but instead handles this by calling out to JavaScript. Shared memory is accomplished by integrating SharedArrayBuffer with WASM's paged memory model. WASM is extended with atomic operation instructions. Putting it concisely the additions of supporting shared array buffers in WASM and adding atomic operations in WASM was all that was needed to facilitate threaded WASM.
@@ -220,7 +343,7 @@ Threaded WASM uses web workers to create and join threads. It doesn't natively i
 A key observation is that WASM does not natively allow for spawning of threads. This is actually taken care of by the runtime or compiler. Specifically for Emscripten, compiling C code written with pthreads will generate three files. It will generate a WASM file, and and two Javascript files. One for the main glue code and other for worker glue code. The glue code takes care of loading the WASM module, populating the memory with the required values, and integrating with the host system as the C code would expect. The C function pthread\_create is translated to Javascript and not WASM. It launches a Javascript Worker, passing it a shared array buffer and the wasm module that it should run. The WASM simply needs the shared array buffer and atomics to synchronize.  
 
 \begin{figure}[htbp]
-\centerline{\includegraphics[scale=0.5]{figures/UML_threaded_wasm.png}}
+\centerline{\includegraphics[width=\textwidth]{figures/UML_threaded_wasm.png}}
 \caption{UML diagram showing flow of execution of threaded programs in WASM}
 \label{uml}
 \end{figure}
@@ -237,7 +360,7 @@ The UML diagram in figure \ref{uml} demonstrates the execution flow of a paralle
 
 \newpage
 
-\section{WASM Multicore Backend}
+\chapter{WASM Multicore Backend}
 The benchmarks in this section compares Tensorflow and Futhark performance on the
 two networks used in the accuracy test, but the benchmark only include the training part of the program
 
@@ -248,20 +371,20 @@ Fortunately only small adaptions had to be made to the WASM backend developed ea
 Though this thesis adds 2 backends to the 6 backends already present in the Futhark compiler (4 C backends, and 2 Python backends), the added complexity is relatively modest because of the high degree of reuse of code between the two WASM backends. 
 
 
-\subsection{Implementation Structure}
+\section{Implementation Structure}
 
 Below we discuss how to add a new futhark backend that can be invoked from the command line with \texttt{futhark wasm-multicore}. It is structured very similarly to the plain wasm backend described chapter 2. Instead of calling Emscripten on the Sequential C, we apply it to futhark's multicore C backend. We utilize the wasm runtime code written in chapter 2, for the backend and add the necessary Emscripten compiler flags required to enable Multicore WASM. Figure (TBD) illustrates the structure of the WASM multicore implementation.
 
 \begin{figure}[htbp]
-\centerline{\includegraphics[scale=0.8]{figures/WASM_MC_compiler.png}}
+\centerline{\includegraphics[width=\textwidth]{figures/WASM_MC_compiler.png}}
 \caption{WASM-multicore compilation}
 \label{fig:wasm-mc}
 \end{figure}
 One of the key differences that can be seen in the figure \ref{fig:wasm-mc} is that the wasm-multicore backend produces 2 JavaScript files and 1 WASM file as opposed to the Sequential Wasm backend which generates 1 JavaScript file and 1 WASM file. The second JavaScript file is the web worker glue code.
 
-\subsection{Implementation Details}
+\section{Implementation Details}
 Here we discuss the series of steps that were needed complete the implementation.
-\subsubsection{Actions}
+\subsection{Actions}
 
 The function \textit{compileMulticoreToWASMAction} contains the plumbing for going from futhark source code to WASM and JavaScript glue code. First it calls \textit{MulticoreWASM.compileProg}. This function take the Futhark source code, and runs the multicore C compiler on the source code, as well as generating the Javascript API code.
 
@@ -269,17 +392,17 @@ The function \textit{compileMulticoreToWASMAction} contains the plumbing for goi
 
 
 \begin{listing}[H]    
-        \inputminted[fontsize=\small,baselinestretch=0.5,linenos]{haskell}{code/actionmc.hs}
+        \inputminted[fontsize=\small,baselinestretch=0.5,linenos,breaklines]{haskell}{code/actionmc.hs}
         \caption{Main file that calls workers which compute prefix sum using shared memory and atomics in parallel}    
         \label{lst:action-mc}    
 \end{listing}    
-\subsubsection{Multicore C code changes}
+\subsection{Multicore C code changes}
 The pthread C code generated by the multicore C backend used platform specific implementations in the generated function \textit{getrusage\_thread} and \textit{num\_processors}. For \textit{getrusage\_thread} it was possible to reuse the linux implementation. For \textit{num\_processors} it was necessary to add an additional implementation for the Emscripten platform. This was simply done by including \textit{emscripten/threading.h} and calling the function \textit{emscripten\_num\_logical\_cores}.
 
 
 
 
-\subsubsection{Emscripten Invocation}
+\subsection{Emscripten Invocation}
 
 The generated multicore C code uses the POSIX function \textit{pthread\_create}. Emscripten aims to follow the POSIX standard closely, but in some places has slightly different behaviour. This is the case for \textit{pthread\_create}, which is a function that is used in the generated multicore C code. 
 
@@ -287,17 +410,17 @@ When pthread\_create() is called, if we need to create a new Web Worker, then th
 
 
 
-\subsubsection{Running in browser with HTTP}
+\subsection{Running in browser with HTTP}
 
 
 
-\subsection{Benchmark}
+\section{Benchmark}
 
 
 
 
 
 
-\section{Conclusion}
+\chapter{Conclusion}
 
 \end{document}
