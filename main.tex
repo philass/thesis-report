@@ -148,6 +148,150 @@ TODO mention GPU API's for the browser
 
 
 \chapter{WASM}
+This chapter gives an overview of the design and structure of the WebAssembly programming language. This will be driven through an example program, and some performance evaluations and literature review. 
+
+
+
+Its important to note that WebAssembly doesn't aim to be a complete replacement for JavaScript. WebAssembly cannot access the DOM for example. WebAssembly was instead designed to have good inter-operation with JavaScript. In practice a developer wanting to get high performance code running in the browser would first write their library in a language such as C or Rust. Then they would compile to WASM, and use JavaScript to call their WebAssembly module in the browser. 
+
+
+
+
+WebAssembly aims to define a portable binary format that can be run in the web with high performance. A WebAssembly file is commonly referred to as a module, and given a \textit{.wasm} file extension. WebAssembly also defines a text format that serves to be a human readable version of the underlying binary format, much in the same way assembly provided a human readable format for machine code. 
+
+
+
+\section{WebAssembly Module Structure}
+
+WebAssembly files are segmented into sections. The segmentation of these sections is done so that loading a WASM file is efficient as possible. The sections are structured such that the byte code be compiled in a single pass, and in parallel. Furthermore the code can be parsed and compiled before the complete WASM file has been downloaded, reducing the instantiation time of a WebAssembly module. 
+%\begin{table}[]
+%\begin{tabular}{|l|l|}
+%\hline
+%ID & Section          \\ \hline
+%0  & custom section   \\ \hline
+%1  & typ section      \\ \hline
+%2  & import section   \\ \hline
+%3  & function section \\ \hline
+%4  & table section    \\ \hline
+%5  & memory section   \\ \hline
+%6  & global section   \\ \hline
+%7  & export section   \\ \hline
+%8  & start section    \\ \hline
+%9  & element section  \\ \hline
+%10 & code section     \\ \hline
+%11 & data section     \\ \hline
+%12 & count section    \\ \hline
+%\end{tabular}
+%\end{table}
+
+A WebAssembly module is split into different sections. These sections are split into two types of sections, known and custom sections. If a known section is included, it can only be included once, and most appear in a strict order. Where as custom sections can be included multiple times. Custom sections are just an arbitrary set of bytes that carry no meaning to WASM but can be useful for third party users. 
+
+\begin{enumerate}
+\addtocounter{enumi}{-1}
+\item Custom section: 
+\item 
+\end{enumerate}
+
+
+WebAssembly supports 4 number types.
+\begin{verbatim}
+i32: 32-bit integer
+i64: 64-bit integer
+f32: 32-bit float
+f64: 64-bit float
+\end{verbatim}
+This has ramifications for inter operation with JavaScript, but is useful with respesct to supporting number types for languages like C/C++ and Rust that aims to be a target language for. 
+
+A WebAssembly function has the following structure.
+\begin{verbatim}
+( func <signature> <locals> <body> )
+\end{verbatim}
+The signature gives the function name, parameter types, and return types. The locals are the local variables that will be used in the execution of the function, and the body is the actual implementation of the function. The most used WebAssembly example is the add function. 
+
+\begin{verbatim}
+(module
+  (func (param $a i32) (param $b i32) (result i32)
+    local.get $a
+    local.get $b
+    i32.add))
+\end{verbatim}
+
+The function signature of add specifies the two arguements a and b as i32s and specifies the return type result as i32. There are no locals. The funciton body has three instructions. The instructions \texttt{local.get \$a} and \texttt{local.get \$b} push the two arguments to onto the stack. The instruction \texttt{i32.add} pops the two elements off the stack and pushes their sum. The function returns the number on the stack. 
+
+The body of the function could be replaced with 
+\begin{verbatim}
+ (i32.add (local.get $a) (local.get $b))
+\end{verbatim}
+that is, the WebAssembly allows the programmer to use a notation where arguments to instructions are passed as parameters instead of manually being placed on the stack.
+
+
+
+%TODO link and ref mdn https://developer.mozilla.org/en-US/docs/WebAssembly/Understanding_the_text_format
+\section{Memory}
+
+A notion of memory is needed for writing more complex programs. In a language like C, it is common practice to use pointers to locations in memory, or for writing an array of values. Memory from the perspective of WASM is just an array of bytes that can be read from and written to. WebAssembly has two essential functions for interacting with this array, namely the \textit{load.i32} and \textit{store.i32}, for reading and writing to the array of bytes respectively.
+
+As a motivating example the following C code gives a simple implementation of an place prefix sum.
+
+\begin{verbatim}
+void prefix_sum(int* arr, int size) {
+  for (i = 1; i < size; i++) {
+    arr[i] += arr[i-1];
+  }
+}
+\end{verbatim}
+The following code is a WebAssembly implementation of inplace prefix sum.
+\begin{verbatim}
+  1 (module
+  2   (import "env" "memory" (memory $memory 1))
+  3   (export "prefixSum" (func $prefixSum))
+  4   (func $prefixSum (param $size i32)
+  5     (local $offs i32)
+  6     (local $acc i32)
+  7     (local $last i32)
+  8     (local.set $offs (i32.const 4))
+  9     (local.set $last (i32.mul (local.get $size) (i32.const 4)))
+ 10     (local.set $acc (i32.load (i32.const 0)))
+ 11     loop $forloop
+ 12       (local.set $acc (i32.add (local.get $acc) (i32.load (local.get $offs))))
+ 13       (i32.store (local.get $offs) (local.get $acc))
+ 14       (local.set $offs (i32.add (local.get $offs) (i32.const 4)))
+ 15       (br_if $forloop (i32.ne (local.get $offs) (local.get $last)))
+ 16     end $forloop
+ 17   )
+ 18 )
+\end{verbatim}
+% TODO brief description of WASM
+% TODO talk about 64k pages
+
+For the implementation a local variable accumulator is set to the first value of the array, and an offset is set to 0. A loop is then entered, where the element at offset in the array is loaded with \texttt{i32.load} added to the accumulator and the result is stored with \texttt{i32.store}. The offset is increased by 4 bytes, and than compared to the local variable last. If it is not equal the loop goes back to the loop on line 12, and repeats.
+
+The most important details of the function implementation for understanding WebAssembly's interaction with memory are the load and store operations, which use byte offsets to address memory. The memory is never explicitly referenced in the function because WebAssembly modules only have one declaration of memory in the memory section, making the array of memory implicit. Memory can either be imported from JavaScript, in which case the memory is created in JavaScript and passed to WebAssembly on instantiation, or alternatively the memory can be exported from WebAssembly, in which case the memory is created in WebAssembly on instantiation and can be accessed in JavaScript afterwards. In line 2 the memory is imported. Where the 
+\begin{verbatim}
+(import "env" "memory" (memory $memory 1))
+\end{verbatim}
+
+the ending 1 sets the size of the memory heap to be 1 page of memory. For WebAssembly 1 page corresponds to 64 kilobytes. Memory is always set to an integral number of pages.
+\section{WASM as a library}
+
+For most practical use cases WebAssembly modules are used as libraries. When compiling C to WASM as a library the Emscripten compiler generates two files. One is a WebAssembly module and the other is JavaScript glue code. This allows web programmers to access all the important elements of WASM from a set of JavaScript functions that the Emscripten runtime defines. This is beneficial for multiple reasons. Firstly working directly with WebAssembly modules is a layer of detail most web developers would like to avoid. Secondly this approach allows a programmer to simply compile their C library and call it from JavaScript. 
+
+\section{WASM and JavaScript interop}
+
+WebAssembly defines a relatively small set of instructions, which runtimes can translate to native code quickly. However because of this it is unable to complete many of the basic functions of JavaScript. The most clear cut example of this is not having access to the DOM. 
+WebAssembly does not have direct access to Web APIs. However it can call imported JavaScript functions. This is the facility that allows it to interact with Web APIs. This simple design feature is incredibly powerful. It is this feature that enables threaded WebAssembly as it can leverage JavaScript's ability to spawn web workers. This will be discussed in greater detail in Chapter 6.
+
+\section{WebAssembly in the browser}
+
+With the development of WebAssemlby
+
+
+\section{WASM outside the browser}
+
+There are applications for WebAssembly outside the browser. 
+
+WebAssemlby executes within a sand-boxed stack-based environment, which means that running foreign code can only effect the virtual environment that executes the WASM module. This compounded with its competitive performance to native code makes it an ideal candidate for any applications that need to run foreign code. 
+
 
 
 
@@ -156,12 +300,12 @@ TODO mention GPU API's for the browser
 This chapter discusses the implementation of the initial WASM backend. It discusses the design choices made with considerations to code maintenance, performance, and practical usability. 
 
 
-
+\section{WebAssembly Code Generation}
 
 The most used WASM backends, namely Rust and C/C++ use LLVM to generate WASM code. The reason they are able to do this successfully is because the languages already have compiler frontends that go from the source language to the LLVM IR. With respect to the Futhark compiler, instead of emitting a standard compiler intermediate representation, it elects to generate C code that can in turn be compiled with any standard C compiler. This has the advantage of portability in the sense that it doesn't depend on LLVM which doesn't come standard on all Windows, and Linux distributions. Emscripten provides the facilities for going from C source code to WASM. The alternative to generating LLVM IR for it to produce WASM and using the Emscripten compiler on the generated C source code, is to generate the WASM by hand. These three choices will be discussed briefly.
 
 \begin{itemize}
-    \item WASM by hand: 
+    \item Generating WASM directly: 
         WASM by hand is by far the least attractive of all the options. Writing low level code is both incredibly time consuming it is also inefficient, in the sense that it would be nearly impossible to capture enough of the  
     \item LLVM IR: This is the most standard approach among compilers. However since Futhark doesn't already generate LLVM IR utilizing this approach would effectively require a redesign of the compiler architecture. This would be an interesting project, with possible positive implications in more places than just a WASM backend. However this would be quite a large task, as the Futhark frontend wasn't designed with this specific intermediate representation in mind. 
     \item Emscripten: Emscripten can simply take C source code generated from the Futhark compiler. This approach would require the least modifications to the compiler. Futhark also aims to emit high performance C code, and Emscripten aims to translate C to high performance WASM code. Connecting the two compiler's together is the approach that is most logical given the current tooling of the futhark compiler.
@@ -287,9 +431,11 @@ The implementation of the values() function can be seen in listing \ref{lst:valu
 
 \section{Compiler Pipeline}
 
-When putting all these pieces together and adding the modifications in the compiler an important implementation observation is that the API only depends on 3 things. The name of Futhark's C library functions, these functions return types and these functions arguments types. This greatly simplifies the implementation. Firstly Futhark's C api is a part of the compiler that is most stable. Only depending on this part of the futhark compiler to generate JavaScript code means this section will rarely have to be adapted to deal with code changes in the intermediate representation of the compiler.
+When putting all these pieces together and adding the modifications in the compiler an important implementation observation is that the API only depends on 3 things. The name of Futhark's C library functions, these functions return types and these functions arguments types. This greatly simplifies the implementation. The function names, return types, and arguement types are needed for generating the runtime classes, and exporting the functions to the emcc command. Firstly Futhark's C api is a part of the compiler that is most stable. Only depending on this part of the futhark compiler to generate JavaScript code means this section will rarely have to be adapted to deal with code changes in the intermediate representation of the compiler.
 
-When Emscripten compiles C code it generates two files. One is a WASM module, which contains the instructions for computing the functions described in the C source code. The other file is JavaScript glue code, which is used to take care of loading the WASM file, as well as handling any JavaScript calls that the WASM module might use. In order to have a WASM module that could be easily used as a library without exposing the low level details of C, the FutharkValue and FutharkContext classes were introduced. Emscripten provides facilities for combining the JavaScript glue code with a library at a command line with the --post-fix and --js-library flags. 
+When Emscripten compiles C code it generates two files. One is a WASM module, which contains the instructions for computing the functions described in the C source code. The other file is JavaScript glue code, which is used to take care of loading the WASM file, as well as handling any JavaScript calls that the WASM module might use. In order to have a WASM module that could be easily used as a library without exposing the low level details of C, the FutharkValue and FutharkContext classes were introduced. Emscripten provides facilities for combining the JavaScript glue code with a library at a command line with the --post-fix and --js-library flags. This is convenient as it reduces the number of files that are produced from running the \textit{futhark wasm} command.
+
+
 
 Figure \ref{fig:wasm} illustrates the logical flow of the compilation of the WASM backend. 
 
@@ -299,9 +445,25 @@ Figure \ref{fig:wasm} illustrates the logical flow of the compilation of the WAS
 \label{fig:wasm}
 \end{figure}
 
+The source program is turned into Futhark's intermediate representation, and than into C source code from there. Where as the runtime classes that the WASM backend generates only depend only depend on a the function names, argument types, and return types, which can easily be taken from the IR. At this stage both the C source code and the API are joined together with the EMCC command, generating glue code with the attached runtime code, and a WASM module. 
 
+\subsection{Emscripten Compiler Flags}
+The Emscripten compiler provides a large number of flags that effect the usage and the performance of the generated WASM code. Some of the flags are specific to the use case, in which case it makes sense to give the programmer flexibiliy in terms of what compiler flags they elect to use. For this reason the flags the backend implementation elects to only use few flags. As discussed previously in order for 64-bit integers to be handled correctly, the backend needs to use the WASM\_BIGINT flag. The other flag that it defaults to is the O3 optimization level. Though this obfuscates the resulting code, it comes with sizeable performance improvements over the other optimization levels.
 
-One of the applications for high performance computing in the browser is graphics. Figure \ref{fig:mandelbrot} illustrates a Futhark program running in the browser for visualizing the mandelbrot set. 
+The most important flag for users of the WASM backend is the memory flag. The memory flag in Emscripten defaults to 16 megabytes, but with performance heavy computation it is likely that this limit will be exceeded. In these cases the user should manually set the memory based on their needs. It is recommended to use less than 2 gigabytes as only recently have virtual machines started to allow more than 2 gigabytes of heap space. This means that using more memory than 2gb's will likely not be portable across browsers and with different WASM engines. 
+
+\begin{listing}
+\begin{minted}{bash}
+EMCFLAGS="-s MEMORY=((16777216 * 4))" futhark wasm --lib prog.fut
+\end{minted}
+\caption{Example futhark wasm compile command}
+\label{lst:fu-wasm-compile}
+\end{listing}
+
+Listing \ref{lst:fu-wasm-compile} shows an example of calling the backend with an additional compiler flag to set the memory limit higher. The additional compiler flags to Emscripten are passed through the environment variable EMCFLAGS. In this case the memory is increased to 64 megabytes.
+\section{Application}
+
+With the WASM backend implemented as described above, it can now be seen in action. One of the applications for high performance computing in the browser is graphics. Figure \ref{fig:mandelbrot} illustrates a Futhark program running in the browser for visualizing the mandelbrot set. First mandelbrot.fut file is compiled as a lib. Than a web server is launched. When the HTML in (TODO cite appendix) is run the webpage in figure \ref{fig:mandelbrot} is rendered.
 
 
 
@@ -345,26 +507,30 @@ The Futhark programs that are benchmarked come from the Futhark benchmark suite,
     \label{tab:my_label}
 \end{table}
 
+The Tunnel Benchmark shows that the WASM backend takes approximately 65\% performance penalty for running the benchmarks with WASM relative to the sequential C backend. This performance penalty is consistent as the dataset increases, which means that it is not a constant overhead of launching or instantiating WASM. WASM when run in Chrome and in Node have nearly identical performance, with the difference never exceeding 2 percentage points.
 
 \begin{table}[h!]
     \noindent\makebox[\textwidth]{%
     \begin{tabular}{|l|l|l|l|l|l|}
     \hline
     Suite      & Dataset                     & Size & C        & WASM     & chrome \\ \hline
-    \multirow{3}{*}{Accelerate} & \multirow{3}{*}{Mandelbrot} & 1000 & 734654   & 1219000  & 1217  \\ \cline{3-6} 
-               &                             & 2000 & 2941993  & 4889000  & 4827    \\ \cline{3-6} 
-               &                             & 4000 & 11761580 & 19693000 & 19302   \\ \hline
+    \multirow{3}{*}{Accelerate} & \multirow{3}{*}{Mandelbrot} & 1000 & 131 ms   & 149 ms  & TODO ms  \\ \cline{3-6} 
+               &                             & 2000 & 530 ms  & 602 ms  & TODO ms    \\ \cline{3-6} 
+               &                             & 4000 & 2,117 ms & 2,403 ms & TODO ms   \\ \hline
     \end{tabular}%
     }
     \caption{Caption}
     \label{tab:my_label}
 \end{table}
 
-The Benchmark shows that the WASM backend takes approximately 65\% performance penalty for running the benchmarks with WASM relative to the sequential C backend. This performance penalty is consistent as the dataset increases, which means that it is not a constant overhead of launching or instantiating WASM. WASM when run in Chrome and in Node have nearly identical performance, with the difference never exceeding 2 percentage points.
+For the mandelbrot benchmarks the WASM backend has more competitive execution speeds. The WASM backend is consistently 13-14\% slower across all the sizes. Similarly to the tunnel backend the relative performance difference of the C backend and the WASM does not change with respect to the dataset sizes.
 
 
+TODO add more benchmarks
 
+TODO add more discussion
 
+TOOO add conclusion
 
 \chapter{Parallel Execution in the Browser}
 
