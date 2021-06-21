@@ -1,0 +1,20 @@
+<!doctype html>
+<html>
+  <head>
+  <script src="scale.js"></script>
+  <script>
+    Module.onRuntimeInitialized = () => {
+      var scalar = 0.5;
+      var matrix = [[0, 1, 2, 3],
+                    [4, 5, 6, 7],
+                    [8, 9, 10, 11]];
+      var fc = new FutharkContext();
+      var result = fc.scale(scalar, matrix);
+      var vals = result.values();
+      console.log(vals);
+    };
+  </script>
+  </head>
+  <body>
+  </body>
+</html>
