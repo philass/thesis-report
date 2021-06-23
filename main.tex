@@ -163,8 +163,10 @@ let matmul [n][p][m] (xss: [n][p]t) (yss: [p][m]t): [n][m]t =
     let dotprod v1 v2 = reduce (+) 0 (map2 (*) v1 v2)
     in map (\xs -> map (dotprod xs) (transpose yss)) xss
 \end{verbatim}
+TODO: EXPLAIN THE CODE!
+This serves as an illustration of how a relatively involved operation can be written using SOACs. Not only is the implementation short, its also fast.
 
-The n,p, and m are size variables that are used to enforce the inputs have the correct dimensions, namely that the number of columns of xss equals the number of rows of yss.
+Currently the futhark compiler is has C backends targeting Cuda, OpenCL, Multicore, and a simple sequential C backend. It also two Python backends. One sequential backend, and a PyOpenCL backend, which serves as the simplest API for getting Futhark running from a foreign language. 
 
 \chapter{WASM}
 This chapter gives an overview of the design and structure of the WebAssembly programming language. This will be driven through an example program, and some performance evaluations and literature review. 
@@ -343,16 +345,30 @@ To illustrate the API and backend implementation working in practice we use the 
 
 Finally we benchmark the Futhark backend to quantify its performance. The benchmarks come from the futhark benchmark suite\footnote{https://github.com/diku-dk/futhark-benchmarks}, which are standardized benchmarks to test the performance of Futhark backends against industry standards. The benchmarks show the WebAssembly, both when run in the Browser and run on Node locally, performs between 12\% to 65\% slower than the generated C running locally. 
 
+\section{API Motivation}
+
+In order to make Futhark a practical language for writing libraries that can be called in the browser it is important that it has a clean and efficient API. As discussed in chapter 3 in practice code that is compiled to WebAssembly modules come packaged with a JavaScript file. This file contains the library functions that are exposed to the programmer, where internally these functions handle the interaction with WebAssembly. This allows users of the library to be completely oblivious of the fact that WebAssembly is being used under the hood, much in the same way that some Python developers are oblivious that numpy is running compiled C under the hood.
+
+A succesful API for calling Futhark in the browser will have the following properties
+\begin{enumerate}
+    \item It should work well with the most commonly used JavaScript number and array data types.
+    \item The API should be efficient both with respect to memory usage and runtime speed.
+    \item Finally the API should minimize set up and tear down code.
+\end{enumerate}
+
 \section{Comparing Futhark APIs}
-
-This section describes the JavaScript API, taking inspiration from Futhark's C and Python APIs. In practice WebAssembly modules aren't called directly instead programmer expect to call it from JavaScript. This allows them to aviod the low level details of working with WASM modules. 
-
 
 It's insightful to look at the APIs of other languages so that we can copy the elements of the APIs that are effective and avoid the parts that are cumbersome or inefficient. These decisions are constrained by the limitations and capabilities of the target language, which for us is JavaScript and WebAssembly.
 
+Soren: An additional reason why it is important to understand the C API is that the JavaScript API builds on the C API because it is implemented as a wrapper around a compilation of the C backend into WebAssembly and JavaScript glue code. 
+
+Philip: An additional reason why it is important to observe the C API is that the WebAssembly backend builds off the sequential C backend. For this reason our design choices for the API are limited to how we can wrap the C API function calls behind JavaScript classes and functions.
+%% MAYBE Section not CHAPTER BE MINDFUL YOUNG CHILD
+
 The exposition will be example based. To best illustrate the API designs we choose an example with multidimensional array inputs and outputs as well as a scalar input. 
 \begin{verbatim}
-entry scale (scalar : f32) (matrix : [][]f32) = map (map (scalar *)) matrix
+entry scale (scalar : f32) (matrix : [][]f32) = 
+map (map (scalar *)) matrix
 \end{verbatim}
 This program multiplies each element of a matrix by a scalar. This is most efficiently expressed in Futhark using maps.
 
@@ -419,7 +435,7 @@ One problem with JavaScript is that it doesn't have a standard package with wide
 
 \subsection{TypedArrays}
 
-The approach that many scientific JavaScript libraries take is to accept TypedArrays as arguments, as well as either multiple arguments or an array for specifying the shape and dimension of the TypedArray. They convienently have a constructor for each of the 10 numerics types that Futhark provides. TypedArrays have a number of advantages.
+The approach that many scientific JavaScript libraries take is to accept TypedArrays as arguments, as well as either multiple arguments or an array for specifying the shape and dimension of the TypedArray. They conveniently have a constructor for each of the 10 numerics types that Futhark provides. TypedArrays have a number of advantages.
 
 \begin{itemize}
     \item Type Enforcement : typed arrays only store the type that is specified by their constructor. 
@@ -427,109 +443,121 @@ The approach that many scientific JavaScript libraries take is to accept TypedAr
     \item Ubiquity : Typed Arrays are present in practically all standard JavaScript runtimes, such as Node.js, and Chrome. They don't need to be imported and are often the return types scientific libraries such as for image or graphics processing
 \end{itemize}
 
-\begin{listing}[H]
-\begin{minted}{JavaScript}
-{'  i8' : Int8Array ,
- ' i16' : Int16Array ,
- ' i32' : Int32Array ,
- ' i64' : BigInt64Array ,
- '  u8' : Uint8Array ,
- ' u16' :  Uint16Array ,
- ' u32' :  Uint32Array ,
- ' u64' :  BigUint64Array ,
- ' f32' : Float32Array ,
- ' f64' : Float64Array ,
- 'bool' : Uint8Array};
-\end{minted}
-\caption{Futhark type to JavaScript TypedArrays mapping}
-\label{lst:type-mapping}
-\end{listing}
 
 In order to maintain the most flexibility with our API design we choose to both have a way to work with the API through simple JavaScript Arrays, as well as through TypedArrays. TypedArrays will have a little extra baggage as we need a method for encompassing shapes.
 
 
-\subsection{WASM limitations}
+\section{JavaScript API}
 
-One of the biggest stick
+\subsection{Types}
 
+Futhark primitive types for all types except i64, u64 and bool are represented by the standard JavaScript number type. i64 and u64 are represented by the BigInt number type. bool is represented by the standard JavaScript Boolean type. The type conversion between Futhark types and JavaScript types can be seen in listing \ref{table:types}.
 
+All array values share the same structure API. They can either be passed in as n-dimensional arrays of their associated JavaScript type. Note that these arrays must be regular, it is on the caller to enforce this.
 
+Alternatively we provide a facility for creating Futhark Array classes from Typed Arrays. Futhark Array classes can also be accepted by entry point functions. Users who have a focus on (space and speed) efficiency should elect to use this over regular JavaScript arrays. Users using a more efficient representation of their data with Typed Arrays aren't forced to convert into a less efficient representation. The type conversion between Futhark types and TypedArrays can be seen in listing \ref{table:types}.
 
-
-
-
-\begin{listing}[H] 
-        \inputminted[fontsize=\small,baselinestretch=0.5,linenos]{C}{code/compiler/api_examples/example.html}
-        \caption{64 bit multiplication with 128 bit casting}
-        \label{lst:int128}    
-\end{listing} 
-
-
-
-
-
-The structure of the C API is that one first configures futhark and creates a futhark context. This creates a context and a mutex to guarantee thread safety if used in a multithreaded environment.  
-
-Futhark has backends for both the C and Python programming languages. 
-\section{Runtime}
-In order to simplify the usage of the generated JavasScript and WASM a runtime is introduced. More specifically two classes are introduced. One of the classes FutharkValue, wraps Futhark values. The FutharkValue class has properties and methods for getting the dimension, and getting the underlying JavaScript array that corresponds to its data. The other class that we include in our runtime system wraps the futhark context, and provides the library functions for going to futhark types, and calling futhark functions. This way the API doesn't expose pointers to the user in the API. 
-
-
-\subsection{FutharkContext}
-
-For listing \ref{lst:futhark-capi} the JavaScript class FutharkContext defines the following functions.
+Finally there are Opaque types, which don't have a clean mapping from Futhark to JavaScript. Instead they are represented with a FutharkOpaque class. This class doesn't have meaning outside of the context. But can be passed back in to entry functions that have the same type in Futhark.
 
 \begin{listing}[H] 
-        \inputminted[fontsize=\small,baselinestretch=0.5,linenos]{javascript}{code/compiler/c-backend/libnames.js}
-        \caption{Futhark Context class and functions}
-        \label{lst:jsapi}    
-\end{listing} 
-The constructor takes care of initializing the context. The two to functions allow the user to convert Javascript arrays into 1 dimensional or 2 dimensional futhark arrays. The from functions provide facilities from going from the futhark arrays to javascript types. In general the programmer may choose to use the from functions, but will more likely elect to simply call equivalent functions on the actual FutharkValue type, to get the actual values. Note that the Futhark Context both keeps track of the Futhark Context and Futhark Config, thus shielding the underlying pointers from the programmer.
+\begin{table}[H]
+\centering
 
-
-\subsection{FutharkValue}
-
-The FutharkValue class provides a helpful mean of encapsulating the futhark values, which can be
-bool, i8, i16, i32, i64, u8, u16, u32, u64, f32, f64, or a multidimensional array of any of these types. JavaScript does not have a good notion of multiple number types. However JavaScript and most web browsers provide TypedArray classes, which can handle arrays of all futhark values, except Booleans. The mapping of the futhark types to their respective JavaScript TypedArray class can be seen in Listing \ref{lst:type-mapping}.
-
-\begin{listing}[H]
-\begin{minted}{JavaScript}
-{'  i8' : Int8Array ,
- ' i16' : Int16Array ,
- ' i32' : Int32Array ,
- ' i64' : BigInt64Array ,
- '  u8' : Uint8Array ,
- ' u16' :  Uint16Array ,
- ' u32' :  Uint32Array ,
- ' u64' :  BigUint64Array ,
- ' f32' : Float32Array ,
- ' f64' : Float64Array ,
- 'bool' : Uint8Array};
-\end{minted}
-\caption{Futhark type to JavaScript TypedArrays mapping}
-\label{lst:type-mapping}
+\begin{tabular}{|c|c|c|}
+\hline
+\textbf{Futhark Type} & \textbf{JavaScript Type} & \textbf{TypedArray Type} \\ \hline
+i8                    & number                   & Int8Array                \\ \hline
+i16                   & number                   & Int16Array               \\ \hline
+i32                   & number                   & Int32Array               \\ \hline
+i64                   & number                   & BigInt64Array            \\ \hline
+u8                    & number                   & Uint8Array               \\ \hline
+u16                   & number                   & Uint16Array              \\ \hline
+u32                   & number                   & Uint32Array              \\ \hline
+u64                   & number                   & BigUint64Array           \\ \hline
+f32                   & number                   & Float32Array             \\ \hline
+f64                   & number                   & Float64array             \\ \hline
+bool                  & boolean                  & Uint8Array               \\ \hline
+\end{tabular}
+\end{table}
+\caption{Type conversion table from Futhark types to primitive JavaScript types and TypedArrays.}
+\label{table:types}
 \end{listing}
 
-In the case where a FutharkValue is a scalar, the underlying data is stored as a singleton TypedArray, so as to keep the encoding, it also keeps track of a string representing its type. This is a little redundant as the typed array mapping gives the type, but it is neccesary to have a mechanism to determine whether the Uint8Array is a uint8 or a bool, and the overhead of keeping track of a four letter character is minimal. The FutharkValue class also keeps track of the shape of the futhark value. The typed array can possibly be a multidimensional array, in which case the underlying array and a shape are sufficient to represent the data.
 
-The other important aspect of the FutharkValue class is how it uses laziness to avoid unnecessary data copying. When an entry point function returns a FutharkValue, the FutharkValue stores a pointer, which is the location of the Futhark array on the Emscripten Heap (If the return type is a scalar than there are no pointers involved). If the user calls another futhark entry point without ever using this intermediary value, it would be inefficient to copy the data from the Emscripten Heap. Instead it makes most sense to only copy the data when the user explicitly asks for it. If the FutharkValue is just past into another entry point the implementation will simply use the underlying pointer. Both the shape and underlying data for the array are stored on the memory heap. For the user to extract the values, or shape they call the values() or shape() function on FutharkValue respectively.
-\begin{listing}[H]
-\begin{minted}{JavaScript}
-      values() {
-        if (!this.values_init) {
-          this.values_ = this.lookup('values');
-          this.values_init = true;
-        }
-        return this.values_;
-      }
-\end{minted}
-\caption{FutharkValues values() method implementation}
-\label{lst:values-implementation}
-\end{listing}
+\subsection*{FutharkContext}
 
-The implementation of the values() function can be seen in listing \ref{lst:values-implementation}. A user who wants the underlying array representing the futhark data makes a call to values(). In which case if values hasn't already been copied from the Emscripten Heap, it calls the lookup function to get the array copied from the heap and than returns it. Otherwise this operation has already been called in the past, in which case its already been evaluated and the array can be returned without any additional work. 
+FutharkContext is a class that contains information about the context and config, and has functions for invoking the Futhark Entry Points and creating array copies on the WebAssembly Heap. 
+
+It is instantiated with the empty constructor.
+
+\begin{verbatim}
+var fc = new FutharkContext();
+\end{verbatim}
+ 
+FutharkContext has methods for creating FutharkArrays, one method for each futhark array type that appears as an argument to any entry point function. Each method has the following signature
+\begin{verbatim}
+    new_<type>_<n>d(typedArray, dim_1, ..., dim_n) 
+\end{verbatim}
+
+Working off of the example scale.fut, to create FutharkArray for a matrix of [][]f32, we would make the following call. 
+
+\begin{verbatim}
+  var fc = new FutharkContext();
+  var typedArray = new Float32Array([0.5, 0.4, 0.3, 0.2, 0.1, 0.0]);
+  var futharkArray = fc.new_f32_2d(typedArray, 3, 2);
+\end{verbatim}
+
+\subsubsection*{Entry Points}
+Each entry point function in the compiled module has a method on the FutharkContext. Scalars parameters are either BigInt numbers, regular JavaScript numbers, or booleans. Array parameters can be either FutharkArrays or, for convenience, JavaScript Arrays.
+
+
+The return types will return a single value if there is only one return type in the entry point function, otherwise it will return an array with a length equal to the number of elements returned in the entry point function. 
+
+Invoking the entry points of scale.fut looks something like this.
+
+\begin{verbatim}
+  var fc = new FutharkContext();
+  var typed_array = new Float32Array([0.5, 0.4, 0.3, 0.2, 0.1, 0.0]);
+  var fut_arr = fc.new_f32_2d(typed_array, 3, 2);
+  var fut_arr_result = fc.scale(0.5, fut_arr);
+\end{verbatim}
+
+As stated earlier entry points also allow JavaScript Arrays as inputs, provided they have the correct types and dimensions and are regular. So an alternative approach with JavaScript arrays would look like this.
+
+\begin{verbatim}
+  var fc = new FutharkContext();
+  var matrix = [[0.5, 0.4], 
+                [0.3, 0.2],
+                [0.1, 0.0]];
+  var fut_arr_result = fc.scale(0.5, matrix);
+\end{verbatim}
+
+The second implementation is simpler but also less efficient as regular JavaScript arrays require multiple levels of type conversion under the hood.
+
+The fut\_arr\_result in both the examples is a FutharkArray. FutharkArray is a class which contains functions for getting the underlying data out into basic JavaScript as either a TypedArray or JavaScript Array.
+
+\subsubsection*{FutharkArray}
+The Futhark Array allows us to get the underlying data from the WebAssembly Heap to JavaScript. It provides the following functions.
+
+\subsubsection*{toArray()}
+Returns a JavaScript array with the correct dimensions and shape of the FutharkArray.
+
+\subsubsection*{toTypedArray()}
+Returns a TypedArray of the underlying data of the FutharkArray.
+
+\subsubsection*{shape()}
+Gives the shapes of the FutharkArray, which is returned as an array of BigInts.
+
+\subsubsection*{futharkType()}
+Returns the futhark type of the elements as a string, i.e. "bool", "u32", "i8", etc.
+
+
+
+
 
 %This chapter discusses the implementation of the initial WASM backend. It discusses the design choices made with considerations to code maintenance, performance, and practical usability. 
+
+\chapter{Implementation}
 
 \section{WebAssembly Code Generation}
 
@@ -602,63 +630,7 @@ Though this program is very simple. It accepts a 2d matrix of i32 numbers, and r
 
 Firstly a Futhark config and context must be initialized. The second important observation is that any array or matrix type must first be converted to an equivalent Futhark type before it can be used as an argument to one of Futhark's entry point functions. Similarly, any array or matrix type returned by Futhark must be converted back into C types by using Futhark library functions, if these values need to be used outside of a futhark context. C does not have an easy to use standard representation of multi-dimensional arrays. JavaScript also doesn't have a good notion of multidimensional arrays, in comparison to a lanuage like Python, where it can leverage the numpy ecosystem. 
 
-\section{Runtime}
-In order to simplify the usage of the generated JavasScript and WASM a runtime is introduced. More specifically two classes are introduced. One of the classes FutharkValue, wraps Futhark values. The FutharkValue class has properties and methods for getting the dimension, and getting the underlying JavaScript array that corresponds to its data. The other class that we include in our runtime system wraps the futhark context, and provides the library functions for going to futhark types, and calling futhark functions. This way the API doesn't expose pointers to the user in the API. 
 
-
-\subsection{FutharkContext}
-
-For listing \ref{lst:futhark-capi} the JavaScript class FutharkContext defines the following functions.
-
-\begin{listing}[H] 
-        \inputminted[fontsize=\small,baselinestretch=0.5,linenos]{javascript}{code/compiler/c-backend/libnames.js}
-        \caption{Futhark Context class and functions}
-        \label{lst:jsapi}    
-\end{listing} 
-The constructor takes care of initializing the context. The two to functions allow the user to convert Javascript arrays into 1 dimensional or 2 dimensional futhark arrays. The from functions provide facilities from going from the futhark arrays to javascript types. In general the programmer may choose to use the from functions, but will more likely elect to simply call equivalent functions on the actual FutharkValue type, to get the actual values. Note that the Futhark Context both keeps track of the Futhark Context and Futhark Config, thus shielding the underlying pointers from the programmer.
-
-
-\subsection{FutharkValue}
-
-The FutharkValue class provides a helpful mean of encapsulating the futhark values, which can be
-bool, i8, i16, i32, i64, u8, u16, u32, u64, f32, f64, or a multidimensional array of any of these types. JavaScript does not have a good notion of multiple number types. However JavaScript and most web browsers provide TypedArray classes, which can handle arrays of all futhark values, except Booleans. The mapping of the futhark types to their respective JavaScript TypedArray class can be seen in Listing \ref{lst:type-mapping}.
-
-\begin{listing}[H]
-\begin{minted}{JavaScript}
-{'  i8' : Int8Array ,
- ' i16' : Int16Array ,
- ' i32' : Int32Array ,
- ' i64' : BigInt64Array ,
- '  u8' : Uint8Array ,
- ' u16' :  Uint16Array ,
- ' u32' :  Uint32Array ,
- ' u64' :  BigUint64Array ,
- ' f32' : Float32Array ,
- ' f64' : Float64Array ,
- 'bool' : Uint8Array};
-\end{minted}
-\caption{Futhark type to JavaScript TypedArrays mapping}
-\label{lst:type-mapping}
-\end{listing}
-
-In the case where a FutharkValue is a scalar, the underlying data is stored as a singleton TypedArray, so as to keep the encoding, it also keeps track of a string representing its type. This is a little redundant as the typed array mapping gives the type, but it is neccesary to have a mechanism to determine whether the Uint8Array is a uint8 or a bool, and the overhead of keeping track of a four letter character is minimal. The FutharkValue class also keeps track of the shape of the futhark value. The typed array can possibly be a multidimensional array, in which case the underlying array and a shape are sufficient to represent the data.
-
-The other important aspect of the FutharkValue class is how it uses laziness to avoid unnecessary data copying. When an entry point function returns a FutharkValue, the FutharkValue stores a pointer, which is the location of the Futhark array on the Emscripten Heap (If the return type is a scalar than there are no pointers involved). If the user calls another futhark entry point without ever using this intermediary value, it would be inefficient to copy the data from the Emscripten Heap. Instead it makes most sense to only copy the data when the user explicitly asks for it. If the FutharkValue is just past into another entry point the implementation will simply use the underlying pointer. Both the shape and underlying data for the array are stored on the memory heap. For the user to extract the values, or shape they call the values() or shape() function on FutharkValue respectively.
-\begin{listing}[H]
-\begin{minted}{JavaScript}
-      values() {
-        if (!this.values_init) {
-          this.values_ = this.lookup('values');
-          this.values_init = true;
-        }
-        return this.values_;
-      }
-\end{minted}
-\caption{FutharkValues values() method implementation}
-\label{lst:values-implementation}
-\end{listing}
-
-The implementation of the values() function can be seen in listing \ref{lst:values-implementation}. A user who wants the underlying array representing the futhark data makes a call to values(). In which case if values hasn't already been copied from the Emscripten Heap, it calls the lookup function to get the array copied from the heap and than returns it. Otherwise this operation has already been called in the past, in which case its already been evaluated and the array can be returned without any additional work. 
 
 \section{Compiler Pipeline}
 
@@ -762,7 +734,6 @@ TODO add more benchmarks
 TODO add more discussion
 
 TOOO add conclusion
-
 \chapter{Parallel Execution in the Browser}
 
 
@@ -864,7 +835,6 @@ The UML diagram in figure \ref{uml} demonstrates the execution flow of a paralle
 %TODO Explain why threaded WASM has no drawbacks becuase it uses the same facilites as javascript for parralel programming while having the speed up of WASM over JS. (Possibly look at over head of launching/loading WASM in a JS worker file).
 
 \newpage
-
 \chapter{WASM Multicore Backend}
 The benchmarks in this section compares Tensorflow and Futhark performance on the
 two networks used in the accuracy test, but the benchmark only include the training part of the program
@@ -920,12 +890,6 @@ When pthread\_create() is called, if we need to create a new Web Worker, then th
 
 
 \section{Benchmark}
-
-
-
-
-
-
 \chapter{Conclusion}
 This is a test\cite{albers2010a} of \cite{bodie2019a} many \cite{kim2015a} different \cite{tsukagoshi2015a} sources \cite{pixhawk_history}.
 
