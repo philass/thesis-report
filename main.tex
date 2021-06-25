@@ -79,7 +79,13 @@
     \textbf{Abstract}
 \end{center}
 
-Futhark is a High-performance purely functional data-parallel array programming language targeting parallel compute hardware. Futhark has backends for several  compute architectures  and this thesis adds browsers because large percentage of toady's software is run in the browser, and the underlying hardware of the laptops and mobile phones that run these browser has increasingly parallel compute with GPU's and multicore CPU's. As such there are heavy development of standardized cross browser Web API's to harness these parallel architectures. One of these technologies is threaded WASM. This thesis develops a WASM and threaded WASM backend for the Futhark programming languages, leveraging both parallel computing and browsers as a target architecture.  
+Futhark is a high-performance purely functional data-parallel array programming language targeting parallel compute hardware. Futhark has backends for several  compute architectures  and this thesis adds browsers by targeting WebAssembly and threaded WebAssembly. These are browser technologies which map better to the underlying hardware of devices, including multicore CPUs. 
+
+A JavaScript API is developed for easily calling compiled Futhark WebAssembly libraries in the browser. 
+The implementation and generated WebAssembly code is benchmarked for both browsers and NodeJS, against the Futhark sequential C and multicore C backends. The sequential WebAssembly performs close to sequential C speeds. The parallel execution of threaded WebAssembly provides a multifactor speedup.
+
+
+%A large percentage of today's software is run in the browser, and the underlying hardware of the laptops and mobile phones that run these browser have increasingly parallel compute with GPU's and multicore CPU's. As such there is heavy development of standardized cross browser Web API's to harness these parallel architectures. One of these technologies is threaded WebAssembly. This thesis develops WebAssembly and threaded WebAssembly backends for the Futhark programming language, leveraging both parallel computing and browsers as a target architecture.  
 
 
 \tableofcontents
@@ -87,12 +93,23 @@ Futhark is a High-performance purely functional data-parallel array programming 
 
 
 \chapter{Introduction}
+
+TODO motivation and goals
+
+
+A large percentage of today's software is run in the browser, and the underlying hardware of the laptops and mobile phones that run these browser have increasingly parallel compute with GPU's and multicore CPU's. As such there is heavy development of standardized cross browser Web API's to harness these parallel architectures. One of these technologies is threaded WebAssembly. %This thesis develops WebAssembly and threaded WebAssembly backends for the Futhark programming language, leveraging both parallel computing and browsers as a target architecture.
+
+
+
 \setcounter{page}{1}
 \pagenumbering{arabic}
 \section{Thesis Structure}
+
+
 \begin{itemize}
     \item Chapter 2, Background:
     Overview of the related work that this thesis builds on.
+
     \item Chapter 3, WASM:
     Explanation and analysis of WASM as a programming language and as a target language for the browser. 
     
@@ -111,41 +128,47 @@ Futhark is a High-performance purely functional data-parallel array programming 
 \end{itemize}
 \chapter{Background}
 
-This chapter introduces web technologies and API's that exist for writing performant code in the browser. Then we discuss the approaches for generating code to run in the browser form a source language with technologies with the LLVM compiler toolchain and WebAssembly. Finally we introduce the Futhark language and the motivation for generating a backend that targets the browser.
+This chapter describes relevant background for the work in this thesis, namely browser programming facilities and the Futhark programming language.
 
-\section{Programming in the Web}
-TODO litter section with citations
+TODO add citations everywhere below
+
+
+
+
+
+\section{Programming Languages in the Browser}
 
 %\section{Futhark}
-
-TODO Futhark (C, POXIS threads backend)
 
 
 %\section{Browsers}
 
-The first web browsers started as Graphical User Interfaces for rendering static web pages. Web Browsers have evolved to keep up with the high paced innovation in web technologies and with modern day browsers having strong similarities with full blown operating systems. 
+%The first web browsers started as Graphical User Interfaces for rendering static web pages. Web Browsers have evolved to keep up with the high paced innovation in web technologies and with modern day browsers having strong similarities with full blown operating systems. 
 
 
 %\subsection{JavaScript}
-JavaScript for a long period of time was the only supported programming language for the browser. As such it became one of the largest programming languages in the world. With browsers being one of the most ubiquitous coding platforms, programmers were restricted to JavaScript for any functionality in their websites that run client side. As a result many languages added backends to target JavaScript to that programmers could write code in their respective languages and generate JavaScript that would run in the browser. The problem is that JavaScript is not a particularly good target language, as it was not designed with this use case in mind. 
 
-In the early days of web browsers, web pages would render differently across browsers as there was no standardization's for web API's. Different browsers supported different programming languages, creating big headaches for programmers, who wanted their websites to render identically across browsers.. One of the first popular languages for the browser was JavaScript. Eventually the big vendors converged on JavaScript releasing the standardized version ECMAScript. 
+%JavaScript for a long period of time was the only supported programming language for the browser. As such it became one of the largest programming languages in the world. With browsers being one of the most ubiquitous coding platforms, programmers were restricted to JavaScript for any functionality in their websites that run client side. As a result many languages added backends to target JavaScript to that programmers could write code in their respective languages and generate JavaScript that would run in the browser. The problem is that JavaScript is not a particularly good target language, as it was not designed with this use case in mind. 
+
+%http://www.observationalhazard.com/2018/06/history-of-web-programming.html
+% ^ This is about the programming languages in the web in the early days vbscript and java applets
+
+In the early days of web browsers, web pages would render differently across browsers as there was no standardization's for web API's. Different browsers supported different programming languages, e.g. Java applets and VBScript, creating big headaches for programmers, who wanted their websites to render identically across browsers. One of the first popular languages for the browser was JavaScript, but the implementations across browsers differed. Eventually the big vendors converged on JavaScript releasing a standardized version called ECMAScript. 
 
 Huge investments have been made to increase the execution speed of JavaScript in the browser. With Google and Mozilla investing heavily into the V8 JavaScript engine and SpyderMonkey, (Add Safari and maybe Opera) respectively. Many approaches have been taken to make JavaScript faster. However they have all been fundamentally limited by the language design. 
 
 %\subsection{ASM.js}
 
-One of the approaches taken by the browser vendors was to define a subset of the language asm.js and a convention for type hints, which were designed for efficient execution by leveraging types and compiler tricks to allow ahead of time compilation. It was intended as a target language for compilation of statically typed programming languages. Emscripten was developed to be a C/C++ to asm.js compiler, utilizing the LLVM toolchain. 
+One of the approaches taken by the browser vendors was to define a subset of the language asm.js and a convention for type hints, which were designed for efficient execution by leveraging types and compiler tricks to allow ahead of time compilation. It was intended as a target language for compilation of statically typed programming languages. Emscripten \cite{emcc} was developed to be a C/C++ to asm.js compiler. 
 
 %\subsection{WASM}
-The major browser vendors collaboratively designed WASM to more comprehensively address the limitations of JavaScript as a target language for the web. It is a portable low level byte code, designed for compact representation, efficient compilation, and near native execution speeds. WASM is gaining adoption and has been used for a variety of applications (TODO: Google Earth and TensorFlow) especially as a target for compilation from C, C++ and Rust. The portability and execution speed have also led to adoption beyond browsers with use cases ranging from (TODO: DFinity and Edge computing). 
+The major browser vendors collaboratively designed WASM \cite{wasm_og} to more comprehensively address the limitations of JavaScript as a target language for the web. It is a portable low level byte code, designed for compact representation, efficient compilation, and near native execution speeds. WASM is gaining adoption and has been used for a variety of applications (TODO: Google Earth and TensorFlow) especially as a target for compilation from C, C++ and Rust. The portability and execution speed have also led to adoption beyond browsers with use cases ranging from (TODO: DFinity and Edge computing). 
 
-\section{LLVM}
-One of the technologies that has greatly helped the adoption of WASM as a target language is the LLVM compiler tool chain. Writing a full compiler from scratch that supports multiple targets is an incredibly time consuming process. In order to have high performance backends for different target architectures such x86 and ARM requires knowledge of many of the low level details of each respective target. An alternative approach is for the Compiler frontend of the source language to take the source code and translate it to the LLVM internal representation. As the LLVM compiler tool-chain can then generate high performance code on all the most common computer architectures. 
+%\section{LLVM}
 
-
-Many languages now support WASM as target language, either as a backend target from their main compiler or through another compiler implementation. Languages that generate LLVM IR have any easy path to WASM code generation. Many of the biggest languages are currently built with or have compiler implementations using LLVM.
-
+One of the technologies that has greatly helped the adoption of WASM as a target language is the LLVM compiler tool chain. Writing a full compiler from scratch that supports multiple targets is an incredibly time consuming process. In order to have high performance backends for different target architectures such x86 and ARM requires knowledge of many of the low level details of each respective target. An alternative approach is for the Compiler frontend of the source language to take the source code and translate it to the LLVM internal representation. As the LLVM compiler tool-chain can then generate high performance code on all the most common computer architectures. Many of the biggest languages are currently built with or have compiler implementations using LLVM.
+LLVM generates WASM and therefore languages that generate LLVM IR have any easy path to WASM code generation. 
+Emscripten uses LLVM and can generate WASM in addition to asm.js. It is the most widely used compiler for generating WASM.
 
 \section{Parallel Programming in the Browser}
 While WASM has progressed the state of the art of single threaded computation speed in browsers an other avenue for execution speed is parallelism. Browsers have facilities for parallel programming. Javascript supports two different paradigms. Web  workers  and  message  passing  enable  parallel  programming  without  shared  memory. SharedArrayBuffer and atomics enable shared memory multithreading with thread synchronization.  There is a threaded WASM proposal that adds atomic operations to the language, and adds support for SharedArrayBuffers while relying on JavaScript’s web workers to create and join threads. 
@@ -154,9 +177,9 @@ TODO mention GPU API's for the browser
 
 \section{Futhark}
 
-Futhark is a data parallel programming languages that can generate high performance parallel code for both the CPU and GPU.  Writing GPU code and multicore CPU code is hard. It is both difficult to write the code as there are many low level details required to make competitive and optimal implementations. Futhark is a high level functional programming language, which aims to do the heavy lifting for the user.
+Futhark \cite{futhark_phd} is a data parallel programming languages that can generate high performance parallel code for both the CPU and GPU .  Writing GPU code and multicore CPU code is hard. It is both difficult to write the code as there are many low level details required to make competitive and optimal implementations. Futhark is a high level functional programming language, which aims to do the heavy lifting for the user.
 
-Futhark programs are generally written with Second-Order Array Combinators, which are similar to the common filter, map, and reduce functions commonly found most programming languages. These functions can be optimized to efficient parallel code. These combinators are surprisingly expressive and be combined to encode code complex programs. To see this in action below is a Futhark implementation of matrix multiply.
+Futhark programs are generally written with Second-Order Array Combinators, which are similar to the filter, map, and reduce functions commonly found in many functional programming languages. These functions can be optimized to efficient parallel code. These combinators are surprisingly expressive and be combined to encode code complex programs. To see this in action below is a Futhark implementation of matrix multiply.
 
 \begin{verbatim}
 let matmul [n][p][m] (xss: [n][p]t) (yss: [p][m]t): [n][m]t =
@@ -164,9 +187,12 @@ let matmul [n][p][m] (xss: [n][p]t) (yss: [p][m]t): [n][m]t =
     in map (\xs -> map (dotprod xs) (transpose yss)) xss
 \end{verbatim}
 TODO: EXPLAIN THE CODE!
-This serves as an illustration of how a relatively involved operation can be written using SOACs. Not only is the implementation short, its also fast.
+This serves as an illustration of how a relatively involved operation can be written using SOACs. Not only is the implementation short, it's also fast.
 
-Currently the futhark compiler is has C backends targeting Cuda, OpenCL, Multicore, and a simple sequential C backend. It also two Python backends. One sequential backend, and a PyOpenCL backend, which serves as the simplest API for getting Futhark running from a foreign language. 
+Currently the futhark compiler has C backends generating Cuda, OpenCL, and plain C code. It also two Python backends, one sequential backend, and a PyOpenCL backend. All the backends can be compiled to libraries, making it possible to call Futhark from C or Python applications. 
+
+The plain C code backend comes in two variants, sequential C and multicore C. The latter is a recent addition and generates parallel code using POSIX threads (pthreads). These backends are important for this thesis. Emscripten compiles sequential C to plain WebAssembly, and C with pthreads to threaded WebAssembly. This allows us to bootstrap these two backends to generate efficient code that can run in the browser. 
+
 
 \chapter{WASM}
 This chapter gives an overview of the design and structure of the WebAssembly programming language. This will be driven through an example program, and some performance evaluations and literature review. 
@@ -329,7 +355,7 @@ WebAssembly executes within a sand-boxed stack-based environment, which means th
 
 \chapter{WASM backend Implementation}
 
-TODO make sure that in previous chapter we explictly explain why WebAssembly is better for JavaScript. 
+TODO make sure that in previous chapter we explictly explain why WebAssembly is better than JavaScript. 
 
 
 
@@ -341,7 +367,7 @@ Firstly we design the JavaScript API. We take inspiration from the Futhark C and
 
 
 
-Secondly we implement the backend. We take outset in the existing futhark Sequential C backend and pass the generated C code to the Emscripten compiler for the final compiler pass. The Emscripten generates both a WebAssembly module along with JavaScript glue code. We generate additional JavaScript code to wrap our API around the JavaScript code generated by Emscripten.
+Secondly we implement the backend. We take outset in the existing futhark Sequential C backend and pass the generated C code to the Emscripten compiler for the final compiler pass. The Emscripten generates a WebAssembly module along with JavaScript glue code. We generate additional JavaScript code to wrap our API around the JavaScript code generated by Emscripten.
 
 To illustrate the API and backend implementation working in practice we use the WebAssembly backend to efficiently generate graphics for the mandelbrot set in a webpage.
 
@@ -349,7 +375,7 @@ Finally we benchmark the Futhark backend to quantify its performance. The benchm
 
 \section{API Motivation}
 
-In order to make Futhark a practical language for writing libraries that can be called in the browser it is important that it has a clean and efficient API. As discussed in chapter 3 in practice code that is compiled to WebAssembly modules come packaged with a JavaScript file. This file contains the library functions that are exposed to the programmer, where internally these functions handle the interaction with WebAssembly. This allows users of the library to be completely oblivious of the fact that WebAssembly is being used under the hood, much in the same way that some Python developers are oblivious that numpy is running compiled C under the hood.
+In order to make Futhark a practical language for writing libraries that can be called in the browser it is important that it has a clean and efficient API. As discussed in chapter 3 in practice code that is compiled to WebAssembly modules come packaged with a JavaScript file. This file contains the library functions that are exposed to the programmer, where internally these functions handle the interaction with WebAssembly. This allows users of the library to be oblivious of the fact that WebAssembly is being used under the hood, much in the same way that some Python developers are oblivious that numpy is running compiled C under the hood.
 
 A succesful API for calling Futhark in the browser will have the following properties
 \begin{enumerate}
@@ -370,10 +396,10 @@ The exposition will be example based. To best illustrate the API designs, we cho
 entry scale (scalar : f32) (matrix : [][]f32) = 
   map (map (scalar *)) matrix
 \end{verbatim}
-This program scale.fut multiplies each element of a matrix by a scalar, and returns the scaled matrix. The implementation isn't important as this code is generated by Futhark. What is important is they way we can pass arguments and capture the return values from this function in the target language. 
+This program scale.fut multiplies each element of a matrix by a scalar, and returns the scaled matrix. The implementation isn't important as this code is generated by Futhark. What is important is the way we can pass arguments and capture the return values from this function in the target language. 
 
 \subsection{C API}
-When scale.fut is compiled as a C library, the files scale.c and scale.h are generated. The implementation and header files respectively. Listing \ref{lst:c-ap} is a C program that interfaces with the generated library. 
+When scale.fut is compiled as a C library, the files scale.c and scale.h are generated. The implementation and header files respectively. Listing \ref{lst:c-api} is a C program that interfaces with the generated library. 
 
 
 \begin{listing}[H] 
@@ -392,7 +418,7 @@ futhark_context_config_free
 
 Futhark's primitive types (bool, integers and floats) are represented by corresponding C types.
 
-For arrays futhark generates a C type for every type that appears as an argument or result type in any entry point function in the library. It also generates functions to create and free arrays. For example for the futhark array type [][]f32, the generated header file scale.h declares a type futhark\_f32\_2d and functions futhark\_new\_f32\_2d and futhark\_free\_f32\_2d for creating and freeing arrays of that type. Moreover the API generates functions futhark\_shape\_f32\_2d and futhark\_values\_f32\_2d for getting the shape (dimensions) and values of the futhark array respectively. 
+For arrays futhark generates a C type for every type that appears as an argument or result type in any entry point function in the library. It also generates functions to create, access, and free arrays. For example for the futhark array type [][]f32, the generated header file scale.h declares a type futhark\_f32\_2d and functions futhark\_new\_f32\_2d and futhark\_free\_f32\_2d for creating and freeing arrays of that type. Moreover the API generates functions futhark\_shape\_f32\_2d and futhark\_values\_f32\_2d for getting the shape (dimensions) and values of the futhark array respectively. 
 
 For each entry point function in the library a C function is generated, which takes the futhark context, an output parameter for each type in the result tuple, as well as an input parameter for each argument. The function signature for the generated C function for scale.fut can be seen below.
 \begin{verbatim}
@@ -414,7 +440,7 @@ When scale.fut is compiled as a Python libray it generates a single Python file 
 \end{listing} 
 
 
-In order to invoke the python library we import the file. Then we instantiate a scale\_class by calling the scale() method. Finally we invoke the method by calling the entry point function with a scalar input and a 2-dimensional numpy array. All primitive Futhark types conveniently map to primitive numpy types. Numpy ndarrays are made up of these primitive types so passing them in as arguments in the API provides sufficient information. We make sure that the numpy array has values of the correct type by calling the astype function of numpy with 'float32' the numpy equivalent of the futhark primitive 'f32'. The entry point function logically returns a numpy ndarray whose elements have type 'foat32'. Interestingly numpy scalars are returned by the Python API if the return time is a scalar. However the entry point function can both accept scalars as normal Python numbers or as numpy scalars.
+In order to invoke the python library we import the file. Then we instantiate a scale\_class by calling the scale() method. Finally we invoke the method by calling the entry point function with a scalar input and a 2-dimensional numpy array. All primitive Futhark types conveniently map to primitive numpy types. Numpy ndarrays are made up of these primitive types so passing them in as arguments in the API provides sufficient information. We make sure that the numpy array has values of the correct type by calling the astype function of numpy with 'float32', the numpy equivalent of the futhark primitive 'f32'. The entry point function logically returns a numpy ndarray whose elements have type 'float32'. Interestingly numpy scalars are returned by the Python API if the return time is a scalar. However the entry point function can both accept scalars as normal Python numbers or as numpy scalars.
 
 
 \subsection{API Comparison}
@@ -423,43 +449,42 @@ One of the features of the Python API that make it simpler is that it wraps the 
 
 
 
-\section{JavaScript API Design}
+\section{JavaScript API}
 
-When designing the JavaScript API we consider both usability and performance, when making design decisions. 
-
-
-\subsection{Futhark Types to JavaScript Types}
-JavaScript has one standard number, which is a 64 bit floating point number. This is typically used to encode all numbers. All the futhark types "u8, u16, u32, i8, i16, i32, f32, f64, and bool" except for u64 and i64 can be encoded by a 64 bit float. Fortunately JavaScript recently introduced BigInt recently in ES2020\footnote{SAY WHAT ES2020} to address this shortcoming of the language. With this there is a way to represent all futhark primitive types with the standard JavaScript number and BigInt. 
-
-One problem with JavaScript is that it doesn't have a standard package with widespread adoption for scientific computing that gives an efficient encoding of n-dimensional arrays. The standard JavaScript array are more reminiscent of lists and have similar semantics the list type of Python. The problem is that there is no way to efficiently validate the shape for d-dimensional arrays and type of each its elements. 
+When designing the JavaScript API we consider both usability and performance. 
 
 
+%\subsection{Futhark Types to JavaScript Types}
+JavaScript has one standard number, which is a 64 bit floating point number. This is typically used to encode all numbers. All the Futhark types u8, u16, u32, i8, i16, i32, f32, f64, and bool except for u64 and i64 can be encoded by a 64 bit float. Fortunately JavaScript recently introduced BigInt in ES2020\footnote{SAY WHAT ES2020} to address this shortcoming of the language. With this there is a way to represent every futhark primitive type with either standard JavaScript numbers, booleans, or BigInts. 
 
-\subsection{TypedArrays}
+One problem with JavaScript is that it doesn't have a standard package with widespread adoption for scientific computing that gives an efficient encoding of n-dimensional arrays. The standard JavaScript array are more reminiscent of lists and have similar semantics to the list type of Python. A problem is that there is no way to efficiently validate the shape for n-dimensional arrays and the types of its elements. 
 
-The approach that many scientific JavaScript libraries take is to accept TypedArrays as arguments, as well as either multiple arguments or an array for specifying the shape and dimension of the TypedArray. They conveniently have a constructor for each of the 10 numerics types that Futhark provides. TypedArrays have a number of advantages.
+
+
+%\subsection{TypedArrays}
+
+The approach that many scientific JavaScript libraries take is to accept typed arrays as arguments, as well as arguments for specifying the shape and dimensions of the typed arrays. There are 10 different typed arrays, one for each of the 10 numeric types that Futhark provides. Typed arrays have a number of advantages:
 
 \begin{itemize}
     \item Type Enforcement : typed arrays only store the type that is specified by their constructor. 
-    \item Memory Efficiency : typed arrays can efficiently store types with less than 64 bit precision more efficiently as they don't need to use 64bit float to also store low order bits. As an example a typed array of 8-bit integers take an eight of the space compared to a regular array storing 8-bit integers.
-    \item Ubiquity : Typed Arrays are present in practically all standard JavaScript runtimes, such as Node.js, and Chrome. They don't need to be imported and are often the return types scientific libraries such as for image or graphics processing
+    \item Memory Efficiency : typed arrays can store types with less than 64 bit precision more efficiently as they don't need to use 64bit float to also store high order bits. As an example a typed array of 8-bit integers takes an eighth of the space compared to a regular array storing numbers.
+    \item Ubiquity : Typed arrays are present in all standard JavaScript runtimes, such as Node.js, and Chrome. They don't need to be imported and are often the return types of scientific libraries such as for image or graphics processing
 \end{itemize}
 
 
-In order to maintain the most flexibility with our API design we choose to both have a way to work with the API through simple JavaScript Arrays, as well as through TypedArrays. TypedArrays will have a little extra baggage as we need a method for encompassing shapes.
+In order to maintain the most flexibility with our API design we choose to both have a way to work with the API through simple JavaScript Arrays, as well as through typed arrays. Typed arrays will have a little extra baggage to carry along shapes.
 
 
-\section{JavaScript API}
+%\section{JavaScript API}
 
-\subsection{Types}
+%\subsection{Types}
 
-Futhark primitive types for all types except i64, u64 and bool are represented by the standard JavaScript number type. i64 and u64 are represented by the BigInt number type. bool is represented by the standard JavaScript Boolean type. The type conversion between Futhark types and JavaScript types can be seen in listing \ref{table:types}.
+Futhark primitive types for all types except i64, u64 and bool are represented by the standard JavaScript number type. i64 and u64 are represented by the BigInt number type. bool is represented by the standard JavaScript boolean type. The type conversion between Futhark types and JavaScript types can be seen in listing \ref{table:types}.
 
-All array values share the same structure API. They can either be passed in as n-dimensional arrays of their associated JavaScript type. Note that these arrays must be regular, it is on the caller to enforce this.
+All array values share the same structure API. They can be passed in as n-dimensional arrays of their associated JavaScript type. Note that these arrays must be regular, it is on the caller to enforce this.
+Alternatively we provide a FutharkArray class which can be instantiated from typed arrays. FutharkArray instances are also accepted by entry point functions. Users who have a focus on (space and speed) efficiency should elect to use this over regular JavaScript arrays. Users using a more efficient representation of their data with typed arrays aren't forced to convert into a less efficient representation. The type conversion between Futhark types and typed arrays can be seen in listing \ref{table:types}.
 
-Alternatively we provide a facility for creating Futhark Array classes from Typed Arrays. Futhark Array classes can also be accepted by entry point functions. Users who have a focus on (space and speed) efficiency should elect to use this over regular JavaScript arrays. Users using a more efficient representation of their data with Typed Arrays aren't forced to convert into a less efficient representation. The type conversion between Futhark types and TypedArrays can be seen in listing \ref{table:types}.
-
-Finally there are Opaque types, which don't have a clean mapping from Futhark to JavaScript. Instead they are represented with a FutharkOpaque class. This class doesn't have meaning outside of the context. But can be passed back in to entry functions that have the same type in Futhark.
+Finally there are Opaque types, which don't have a clean mapping from Futhark to JavaScript. Instead they are represented with a FutharkOpaque class. This class doesn't have meaning outside of the context of being passed form the output of one entry point to the input to another entry point with the same type.
 
 \begin{listing}[H] 
 \begin{table}[H]
@@ -471,11 +496,11 @@ Finally there are Opaque types, which don't have a clean mapping from Futhark to
 i8                    & number                   & Int8Array                \\ \hline
 i16                   & number                   & Int16Array               \\ \hline
 i32                   & number                   & Int32Array               \\ \hline
-i64                   & number                   & BigInt64Array            \\ \hline
+i64                   & BigInt                   & BigInt64Array            \\ \hline
 u8                    & number                   & Uint8Array               \\ \hline
 u16                   & number                   & Uint16Array              \\ \hline
 u32                   & number                   & Uint32Array              \\ \hline
-u64                   & number                   & BigUint64Array           \\ \hline
+u64                   & BigInt                   & BigUint64Array           \\ \hline
 f32                   & number                   & Float32Array             \\ \hline
 f64                   & number                   & Float64array             \\ \hline
 bool                  & boolean                  & Uint8Array               \\ \hline
@@ -488,7 +513,7 @@ bool                  & boolean                  & Uint8Array               \\ \
 
 \subsection*{FutharkContext}
 
-FutharkContext is a class that contains information about the context and config, and has functions for invoking the Futhark Entry Points and creating array copies on the WebAssembly Heap. 
+FutharkContext is a class that contains information about the context and configuration from the C API. It has methods for invoking the Futhark entry points and creating FutharkArrays on the WebAssembly heap. 
 
 It is instantiated with the empty constructor.
 
@@ -512,19 +537,19 @@ Working off of the example scale.fut, to create FutharkArray for a matrix of [][
 \subsubsection*{Entry Points}
 Each entry point function in the compiled module has a method on the FutharkContext. Scalars parameters are either BigInt numbers, regular JavaScript numbers, or booleans. Array parameters can be either FutharkArrays or, for convenience, JavaScript Arrays.
 
+The method returns an array if the futhark return type is a tuple. Otherwise it returns a single value.
 
-The return types will return a single value if there is only one return type in the entry point function, otherwise it will return an array with a length equal to the number of elements returned in the entry point function. 
-
-Invoking the entry points of scale.fut looks something like this.
+Invoking the entry points of scale.fut looks something like this:
 
 \begin{verbatim}
   var fc = new FutharkContext();
   var typed_array = new Float32Array([0.5, 0.4, 0.3, 0.2, 0.1, 0.0]);
   var fut_arr = fc.new_f32_2d(typed_array, 3, 2);
   var fut_arr_result = fc.scale(0.5, fut_arr);
+  console.log(fut_arr_result.toTypedArray(), fut_arr_result.shape());
 \end{verbatim}
 
-As stated earlier entry points also allow JavaScript Arrays as inputs, provided they have the correct types and dimensions and are regular. So an alternative approach with JavaScript arrays would look like this.
+As stated earlier entry points also allow JavaScript Arrays as inputs, provided they have the correct types and dimensions and are regular. So an alternative approach with JavaScript arrays would look like this:
 
 \begin{verbatim}
   var fc = new FutharkContext();
@@ -532,23 +557,26 @@ As stated earlier entry points also allow JavaScript Arrays as inputs, provided 
                 [0.3, 0.2],
                 [0.1, 0.0]];
   var fut_arr_result = fc.scale(0.5, matrix);
+  console.log(fut_arr_result.toArray());
 \end{verbatim}
 
 The second implementation is simpler but also less efficient as regular JavaScript arrays require multiple levels of type conversion under the hood.
 
-The fut\_arr\_result in both the examples is a FutharkArray. FutharkArray is a class which contains functions for getting the underlying data out into basic JavaScript as either a TypedArray or JavaScript Array.
+The fut\_arr\_result in both the examples is a FutharkArray. FutharkArray has methods for getting the underlying data out into basic JavaScript as either a TypedArray or JavaScript Array.
+
+We omitted calls to free arrays and context in these examples. However this will be discussed in section ? below.
 
 \subsubsection*{FutharkArray}
-The Futhark Array allows us to get the underlying data from the WebAssembly Heap to JavaScript. It provides the following functions.
+The FutharkArray allows us to get the underlying data from the WebAssembly Heap to JavaScript. It provides the following methods:
 
 \subsubsection*{toArray()}
-Returns a JavaScript array with the correct dimensions and shape of the FutharkArray.
+Returns a JavaScript array with the correct dimensions.
 
 \subsubsection*{toTypedArray()}
-Returns a TypedArray of the underlying data of the FutharkArray.
+Returns a flat typed array of the underlying data.
 
 \subsubsection*{shape()}
-Gives the shapes of the FutharkArray, which is returned as an array of BigInts.
+Gives the shape of the FutharkArray as an array of BigInts.
 
 \subsubsection*{futharkType()}
 Returns the futhark type of the elements as a string, i.e. "bool", "u32", "i8", etc.
@@ -559,17 +587,20 @@ Returns the futhark type of the elements as a string, i.e. "bool", "u32", "i8", 
 
 %This chapter discusses the implementation of the initial WASM backend. It discusses the design choices made with considerations to code maintenance, performance, and practical usability. 
 
-\chapter{Implementation}
+%\chapter{Implementation}
 
 \section{WebAssembly Code Generation}
 
-The most used WASM backends, namely Rust and C/C++ use LLVM to generate WASM code. The reason they are able to do this successfully is because the languages already have compiler frontends that go from the source language to the LLVM IR. With respect to the Futhark compiler, instead of emitting a standard compiler intermediate representation, it elects to generate C code that can in turn be compiled with any standard C compiler. This has the advantage of portability in the sense that it doesn't depend on LLVM which doesn't come standard on all Windows, and Linux distributions. Emscripten provides the facilities for going from C source code to WASM. The alternative to generating LLVM IR for it to produce WASM and using the Emscripten compiler on the generated C source code, is to generate the WASM by hand. These three choices will be discussed briefly.
+We will now describe the implementation of the WebAssembly backend for Futhark.
+
+The most used WASM backends, namely Rust and C/C++ use LLVM to generate WASM code. The reason they are able to do this successfully is because the languages already have compiler frontends that go from the source language to the LLVM IR. With respect to the Futhark compiler, instead of emitting a standard compiler intermediate representation, it elects to generate C code that can in turn be compiled with any standard C compiler. This has the advantage of portability in the sense that it doesn't depend on LLVM which doesn't come standard on all Windows, and Linux distributions. 
+Emscripten provides the facilities for going from C source code to WASM. The alternative to generating LLVM IR for it to produce WASM, is using the Emscripten compiler on the generated C code. The last option is to directly generate WASM from Futhark source code. These three choices will be discussed briefly.
 
 \begin{itemize}
     \item Generating WASM directly: 
-        WASM by hand is by far the least attractive of all the options. Writing low level code is both incredibly time consuming it is also inefficient, in the sense that it would be nearly impossible to capture enough of the  
+        This is the least attractive of all the options. Writing low level code is time consuming and also inefficient, in the sense that it would be nearly impossible to capture enough of the optimizations that modern compilers provide.
     \item LLVM IR: This is the most standard approach among compilers. However since Futhark doesn't already generate LLVM IR utilizing this approach would effectively require a redesign of the compiler architecture. This would be an interesting project, with possible positive implications in more places than just a WASM backend. However this would be quite a large task, as the Futhark frontend wasn't designed with this specific intermediate representation in mind. 
-    \item Emscripten: Emscripten can simply take C source code generated from the Futhark compiler. This approach would require the least modifications to the compiler. Futhark also aims to emit high performance C code, and Emscripten aims to translate C to high performance WASM code. Connecting the two compiler's together is the approach that is most logical given the current tooling of the futhark compiler.
+    \item Emscripten: Emscripten can simply take C source code generated from the Futhark compiler. This approach would require the least modifications to the compiler. Futhark also aims to emit high performance C code, and Emscripten aims to translate C to high performance WASM code. Connecting the two compilers together is the approach that is most logical.
 \end{itemize}
 
 Conveniently the Emscripten compiler is a full fledged production ready C and C++ to WASM compiler, used by the likes of Google, and Mozilla. In order to test the viability of taking generated C source code and passing it through the Emscripten compiler, some exploratory testing was necessary.
@@ -585,14 +616,23 @@ let main = 1i32
 
 
 
-However when this code compiles to C. it generates over 2200 lines of code. This is because it contains logic for option parsing, and a fair deal of boiler plate code. Before going farther with the Emscripten compiler it is a worth while experiment to see what modifications have to be made to the generated C code before it can be accepted by the Emscripten compiler. One issue was in platform specific code used for timing, however on further inspection it turned out that this code was a relic and not actually used anywhere in the compiler, and therefor could just be deleted. Listing \ref{lst:int128} gives the other function implementation that Emscripten can't compile.
+However when this code compiles to C. it generates over 2200 lines of code. This is because it contains logic for option parsing, and a fair deal of boiler plate code
+
+TODO say what the boiler plate code is and don't call it boiler plate.
+
+
+Before going farther with the Emscripten compiler it is a worth while experiment to see what modifications have to be made to the generated C code before it can be accepted by the Emscripten compiler.
+
+One issue was in platform specific code used for timing, however on further inspection it turned out that this code was a relic and not actually used anywhere in the compiler, and therefore could just be deleted.
+
+Listing \ref{lst:int128} gives the other function implementation that Emscripten can't compile.
 \begin{listing}[H] 
         \inputminted[fontsize=\small,baselinestretch=0.5,linenos]{C}{code/compiler/int128_c.c}
         \caption{64 bit multiplication with 128 bit casting}
         \label{lst:int128}    
 \end{listing} 
 
-The issue is that Emscripten and WASM don't support \textit{uint128} types. Instead an alternatate implementation for calculating the high order bits of 64 bit multiplication, that doesn't cast to \textit{uint128} numbers is used. 
+The issue is that Emscripten and WASM don't support \textit{uint128} types. Instead an alternatate implementation for calculating the high order bits of 64 bit multiplication that doesn't cast to \textit{uint128} numbers is used. 
 
 \begin{listing}[H] 
         \inputminted[fontsize=\small,baselinestretch=0.5,linenos]{C}{code/compiler/int128_wasm.c}
@@ -601,44 +641,73 @@ The issue is that Emscripten and WASM don't support \textit{uint128} types. Inst
 \end{listing} 
 
 
-With the small modifications described to get the generated C to a state where it can be compiled with the Emscripten compiler, Futhark programs, can be compile to WASM and run with Node as Executables. Note that this is specifically for executables and not C libraries. However it is of most interest to get Futhark running in the browser as a library such that web developers can design high performance libraries in futhark and then call them from JavaScript in their frontend. 
+With the small modifications described to get the generated C to a state where it can be compiled with the Emscripten compiler, Futhark programs can be compiled to WASM and run with Node as Executables. Note that this is specifically for executables and not C libraries. However it is of most interest to get Futhark running in the browser as a library such that web developers can design high performance libraries in futhark and then call them from JavaScript in their frontend. 
 
 
-\subsection{JavaScript and WebAssembly number types}
+%\subsection{JavaScript and WebAssembly number types}
 
-In order use the JavaScript and WebAssembly code that is generated by Emscripten as a library, the C library functions need to be exported during the Emscripten compilation process. The library functions that need to be exported are the ones that the Futhark C backends spit out into the C header file, when the futhark program is compiled as a library. Again this whole process works almost out of the box when connecting Futhark's C library code generator with the appropriate Emscripten command. However an issue is that int64 types create cryptic errors when they are provided argument types to functions. 
+In order use the JavaScript and WebAssembly code that is generated by Emscripten as a library, the C library functions need to be exported during the Emscripten compilation process. The library functions that need to be exported are the ones that the Futhark C backends emit into the C header file when the futhark program is compiled as a library. Again this whole process works almost out of the box when connecting Futhark's C library code generator with the appropriate Emscripten command. However an issue is that int64 types create cryptic errors when they are provided argument types to functions. 
 
-JavaScript are 64-bit floating-point values. This means that all 32 bit numbers can be represented in JavaScript, but not all 64 bit numbers can be represented with full precision. WebAssembly fully support for 64-bit integers. This creates an issue as JavaScript can not call WebAssembly functions with appropriate type. This can be handled by instead passing two arguments to JavaScript functions, one for the low order 32 bits, and another for the high order 32 bits. This method is quite clunky, which is why Emscripten introduced the WASM\_BIGINT flag during compilation. It also come with a speed up over the old workaround. 
+JavaScript are 64-bit floating-point values. This means that all 32 bit numbers can be represented in JavaScript, but not all 64 bit numbers can be represented with full precision.
+%WebAssembly fully support for 64-bit integers. This creates an issue as JavaScript can not call WebAssembly functions with appropriate type. This can be handled by instead passing two arguments to JavaScript functions, one for the low order 32 bits, and another for the high order 32 bits. This method is quite clunky, which is why 
+%
+Emscripten solves this with BigInts when used with the WASM\_BIGINT compiler flag. This gets 64-bit integers working in C with the caveat that when the function is called from JavaScript, the argument must be provided as a JavaScript BigInt.
 % Possibly show function taking two arguements here as an example
-After introducing this compiler flag and with the appropriate functions exported from the header file,  %Reference https://v8.dev/features/wasm-bigint
-a programmer with familiar with the semantics of the Emscripten heap has a workable WASM library. This involves keeping track of the pointers on the Emscripten heap, by passing them into the appropriate functions. However working with pointers in JavaScript is both not idiomatic and not safe. For Futhark to be practical the implementation details of the raw pointers to the heap should be extracted away, and should be shielded by a layer of abstraction.
-Below is a simple futhark program for calculating the sum of rows in a matrix. 
+%After introducing this compiler flag and with the appropriate functions exported from the header file,  %Reference https://v8.dev/features/wasm-bigint
 
+With these fixes a programmer familiar with the semantics of the Emscripten heap has a workable WASM library.
+
+When Emscripten compiles C code it generates two files. One is a WASM module, which contains the instructions for computing the functions described in the C source code. The other file is JavaScript glue code, which is used to take care of loading the WASM file, as well as handling any JavaScript calls that the WASM module might use.
+
+TODO show scale.fut from bare bones wasm and js. and how one would call it from JS in that case.
+
+\begin{verbatim}
+futhark_values_raw_f32_2d =
+Module.cwrap(
+    'futhark_values_raw_f32_2d', 'number', ['number', 'number']
+);
+\end{verbatim}
 \begin{listing}[H] 
-        \inputminted[fontsize=\small,baselinestretch=0.5,linenos]{haskell}{code/compiler/c-backend/main.fut}
-        \caption{Simple futhark row sum program}
-        \label{lst:futhark-capi}   
-
+        \inputminted[fontsize=\small,baselinestretch=0.5,linenos]{JavaScript}{code/compiler/api_examples/heap-helpers.js}
+        \caption{Heap helper functions}
+        \label{lst:heap-helpers}    
 \end{listing} 
 
-Though this program is very simple. It accepts a 2d matrix of i32 numbers, and returns an array of i32. However the machinery for working with this in C is a little bit clunky. The code below shows how this program would be called from C.
 
 \begin{listing}[H] 
-        \inputminted[fontsize=\small,baselinestretch=0.5,linenos]{C}{code/compiler/c-backend/example.c}
-        \caption{C API Usage for Simple futhark program}
-
-        \label{lst:capi}    
+        \inputminted[fontsize=\small,baselinestretch=0.5,linenos]{JavaScript}{code/compiler/api_examples/raw.js}
+        \caption{Working with raw Emscripten }
+        \label{lst:raw}    
 \end{listing} 
 
-Firstly a Futhark config and context must be initialized. The second important observation is that any array or matrix type must first be converted to an equivalent Futhark type before it can be used as an argument to one of Futhark's entry point functions. Similarly, any array or matrix type returned by Futhark must be converted back into C types by using Futhark library functions, if these values need to be used outside of a futhark context. C does not have an easy to use standard representation of multi-dimensional arrays. JavaScript also doesn't have a good notion of multidimensional arrays, in comparison to a lanuage like Python, where it can leverage the numpy ecosystem. 
+Pointers are complicated as they must be tracked on the Emscripten heap. Working with pointers in JavaScript like this is both not idiomatic and not safe. For Futhark to be practical the implementation details of the raw pointers to the heap should be extracted away, and should be shielded by a layer of abstraction.
 
+TODO: write text expressing how now we want to go from this to our API designed in previous section. 
+
+TODO explain FutharkArray
+
+\begin{listing}[H] 
+        \inputminted[fontsize=\small,baselinestretch=0.5,linenos]{JavaScript}{code/compiler/api_examples/FutharkArray.js}
+        \caption{Class FutharkArray}
+        \label{lst:FutharkArray}    
+\end{listing} 
+
+TODO explain FutharkContext
+
+\begin{listing}[H] 
+        \inputminted[fontsize=\small,baselinestretch=0.5,linenos]{JavaScript}{code/compiler/api_examples/FutharkContext.js}
+        \caption{Class FutharkContext}
+        \label{lst:FutharkContext}    
+\end{listing} 
 
 
 \section{Compiler Pipeline}
 
-When putting all these pieces together and adding the modifications in the compiler an important implementation observation is that the API only depends on 3 things. The name of Futhark's C library functions, these functions return types and these functions arguments types. This greatly simplifies the implementation. The function names, return types, and arguement types are needed for generating the runtime classes, and exporting the functions to the emcc command. Firstly Futhark's C api is a part of the compiler that is most stable. Only depending on this part of the futhark compiler to generate JavaScript code means this section will rarely have to be adapted to deal with code changes in the intermediate representation of the compiler.
+When putting all these pieces together and adding the modifications in the compiler an important implementation observation is that the API only depends on 3 things. The name of Futhark's C library functions, these functions' return types, and these functions' arguments types. This greatly simplifies the implementation. The function names, return types, and argument types are needed for generating the runtime classes, and exporting the functions to the emcc command. Firstly Futhark's C API is a part of the compiler that is most stable. Only depending on this part of the futhark compiler to generate JavaScript code means this section will rarely have to be adapted to deal with code changes in the intermediate representation of the compiler.
 
-When Emscripten compiles C code it generates two files. One is a WASM module, which contains the instructions for computing the functions described in the C source code. The other file is JavaScript glue code, which is used to take care of loading the WASM file, as well as handling any JavaScript calls that the WASM module might use. In order to have a WASM module that could be easily used as a library without exposing the low level details of C, the FutharkValue and FutharkContext classes were introduced. Emscripten provides facilities for combining the JavaScript glue code with a library at a command line with the --post-fix and --js-library flags. This is convenient as it reduces the number of files that are produced from running the \textit{futhark wasm} command.
+%When Emscripten compiles C code it generates two files. One is a WASM module, which contains the instructions for computing the functions described in the C source code. The other file is JavaScript glue code, which is used to take care of loading the WASM file, as well as handling any JavaScript calls that the WASM module might use. In order to have a WASM module that could be easily used as a library without exposing the low level details of C, the FutharkValue and FutharkContext classes were introduced. 
+
+Emscripten provides facilities for combining the JavaScript glue code with a library at a command line with the --post-fix and --js-library flags. This is convenient as it reduces the number of files that are produced from running the \textit{futhark wasm} command.
 
 
 
@@ -874,7 +943,7 @@ The pthread C code generated by the multicore C backend used platform specific i
 
 The generated multicore C code uses the POSIX function \textit{pthread\_create}. Emscripten aims to follow the POSIX standard closely, but in some places has slightly different behaviour. This is the case for \textit{pthread\_create}, which is a function that is used in the generated multicore C code. 
 
-When pthread\_create() is called, if we need to create a new Web Worker, then that requires returning the main event loop. That is, you cannot call pthread\_create and then keep running code synchronously that expects the worker to start running - it will only run after you return to the event loop (TODO cite pthread docs). In order to work around the API differences, the compiler flag \textit{PTHREAD\_POOL\_SIZE=<integer} needs to be passed to the Emscripten compiler. This effectively creates the web workers before the main thread is called, in which case create\_pthread can just use an already spawned web worker. From testing, this parameter is best set to the number of logical\_cores of the underlying hardware.
+When pthread\_create() is called, if we need to create a new Web Worker, then that requires returning the main event loop. That is, you cannot call pthread\_create and then keep running code synchronously that expects the worker to start running - it will only run after you return to the event loop (TODO cite pthread docs). In order to work around the API differences, the compiler flag \textit{PTHREAD\_POOL\_SIZE=<integer>} needs to be passed to the Emscripten compiler. This effectively creates the web workers before the main thread is called, in which case create\_pthread can just use an already spawned web worker. From testing, this parameter is best set to the number of logical\_cores of the underlying hardware.
 
 
 
@@ -894,12 +963,14 @@ When pthread\_create() is called, if we need to create a new Web Worker, then th
 
 \section{Benchmark}
 \chapter{Conclusion}
-This is a test\cite{albers2010a} of \cite{bodie2019a} many \cite{kim2015a} different \cite{tsukagoshi2015a} sources \cite{pixhawk_history}.
+
+TODO
 
 
 \appendix
-\chapter{Some title}
-Lets see what happens
+\chapter{Source Code}
+
+TODO
 
 
 
