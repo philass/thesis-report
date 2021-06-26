@@ -2,12 +2,10 @@ class FutharkContext {
     constructor() {
       this.cfg = futhark_context_config_new();
       this.ctx = futhark_context_new(this.cfg);
-      this.entry_points = {
-        'scale' : [["f32","[][]f32"], ["[][]f32"]]
-      };
     }
-    get_entry_points() {
-      return this.entry_points;
+    free() {
+      futhark_context_free(this.ctx);
+      futhark_context_config_free(this.cfg);
     }
     get_error() {
       var error_ptr = futhark_context_get_error(this.ctx);

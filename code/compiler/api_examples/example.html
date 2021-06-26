@@ -12,6 +12,8 @@
       var result = fc.scale(scalar, matrix);
       var vals = result.values();
       console.log(vals);
+      result.free();
+      fc.free();
     };
   </script>
   </head>

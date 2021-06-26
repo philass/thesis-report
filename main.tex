@@ -14,7 +14,7 @@
 \usepackage{tocbibind}
 
 % Here is where you add your own .bib file
-\addbibresource{paul_bib.bib}
+\addbibresource{sources.bib}
 
 \pagestyle{fancy}
 \fancyhf{}
@@ -130,7 +130,6 @@ A large percentage of today's software is run in the browser, and the underlying
 
 This chapter describes relevant background for the work in this thesis, namely browser programming facilities and the Futhark programming language.
 
-TODO add citations everywhere below
 
 
 
@@ -161,12 +160,21 @@ Huge investments have been made to increase the execution speed of JavaScript in
 
 One of the approaches taken by the browser vendors was to define a subset of the language asm.js and a convention for type hints, which were designed for efficient execution by leveraging types and compiler tricks to allow ahead of time compilation. It was intended as a target language for compilation of statically typed programming languages. Emscripten \cite{emcc} was developed to be a C/C++ to asm.js compiler. 
 
+Google also introduces Google Native Client (NaCl)\cite{nacl} as a way to bridge the speed gap between running code in the browser, and natively. NaCl is a sandbox for running compiled C and C++ code in the browser efficiently and securely, independent of the user’s operating system \cite{nacl}. However it struggled to gain adoption due to its lack of portability as it was only supported by Chromium based browsers. 
+
+
 %\subsection{WASM}
-The major browser vendors collaboratively designed WASM \cite{wasm_og} to more comprehensively address the limitations of JavaScript as a target language for the web. It is a portable low level byte code, designed for compact representation, efficient compilation, and near native execution speeds. WASM is gaining adoption and has been used for a variety of applications (TODO: Google Earth and TensorFlow) especially as a target for compilation from C, C++ and Rust. The portability and execution speed have also led to adoption beyond browsers with use cases ranging from (TODO: DFinity and Edge computing). 
+The major browser vendors collaboratively designed WASM \cite{wasm_og} to more comprehensively address the limitations of JavaScript as a target language for the web. It is a portable low level byte code, designed for compact representation, efficient compilation, and near native execution speeds. WASM is gaining adoption and has been used for a variety of applications especially as a target for compilation from C, C++ and Rust. 
+
+Google Earth\cite{google-earth-history} is a computer program, that renders a 3D representation of Earth based primarily on satellite imagery. It started out as a desktop application, but in 2013 was ported to the web. It originally only ran in Chrome, as it was built on NaCl. They tried to build it with asm.js, but found that the binary sizes of compiling over a million lines of code with Emscripten, to be infeasible large. However with the creation of WebAssembly they were able to make a high performance cross browser implementation of Google Earth due to the speed and small binary sizes of WebAssembly \cite{google-earth}.
+
+TensorFlow \cite{tensorflow} is an open source machine learning library, originally written in C++. Due to the large eco-system of JavaScript developers and its ability to run on the browser, they introduced TensorFlow.js \cite{tensorflowjs}. They have multiple backends including a WebAssembly backend due to its high performance traits. An interesting aspect of the TensorFlow.js project is that it provides a libraries for web developers to create machine learning models in their website. 
+
+The portability and execution speed have also led to adoption beyond browsers with use cases ranging from (TODO: DFinity and Edge computing). 
 
 %\section{LLVM}
 
-One of the technologies that has greatly helped the adoption of WASM as a target language is the LLVM compiler tool chain. Writing a full compiler from scratch that supports multiple targets is an incredibly time consuming process. In order to have high performance backends for different target architectures such x86 and ARM requires knowledge of many of the low level details of each respective target. An alternative approach is for the Compiler frontend of the source language to take the source code and translate it to the LLVM internal representation. As the LLVM compiler tool-chain can then generate high performance code on all the most common computer architectures. Many of the biggest languages are currently built with or have compiler implementations using LLVM.
+One of the technologies that has greatly helped the adoption of WASM as a target language is the LLVM \cite{llvm} compiler tool chain. Writing a full compiler from scratch that supports multiple targets is an incredibly time consuming process. In order to have high performance backends for different target architectures such x86 and ARM requires knowledge of many of the low level details of each respective target. An alternative approach is for the Compiler frontend of the source language to take the source code and translate it to the LLVM internal representation. As the LLVM compiler tool-chain can then generate high performance code on all the most common computer architectures. Many of the biggest languages are currently built with or have compiler implementations using LLVM.
 LLVM generates WASM and therefore languages that generate LLVM IR have any easy path to WASM code generation. 
 Emscripten uses LLVM and can generate WASM in addition to asm.js. It is the most widely used compiler for generating WASM.
 
@@ -191,7 +199,7 @@ This serves as an illustration of how a relatively involved operation can be wri
 
 Currently the futhark compiler has C backends generating Cuda, OpenCL, and plain C code. It also two Python backends, one sequential backend, and a PyOpenCL backend. All the backends can be compiled to libraries, making it possible to call Futhark from C or Python applications. 
 
-The plain C code backend comes in two variants, sequential C and multicore C. The latter is a recent addition and generates parallel code using POSIX threads (pthreads). These backends are important for this thesis. Emscripten compiles sequential C to plain WebAssembly, and C with pthreads to threaded WebAssembly. This allows us to bootstrap these two backends to generate efficient code that can run in the browser. 
+The plain C code backend comes in two variants, sequential C and multicore C. The latter is a recent addition and generates parallel code using POSIX threads (pthreads) \cite{multicore}. These backends are important for this thesis. Emscripten compiles sequential C to plain WebAssembly, and C with pthreads to threaded WebAssembly. This allows us to bootstrap these two backends to generate efficient code that can run in the browser. 
 
 
 \chapter{WASM}
@@ -353,7 +361,7 @@ WebAssembly executes within a sand-boxed stack-based environment, which means th
 
 
 
-\chapter{WASM backend Implementation}
+\chapter{API Design}
 
 TODO make sure that in previous chapter we explictly explain why WebAssembly is better than JavaScript. 
 
@@ -375,13 +383,13 @@ Finally we benchmark the Futhark backend to quantify its performance. The benchm
 
 \section{API Motivation}
 
-In order to make Futhark a practical language for writing libraries that can be called in the browser it is important that it has a clean and efficient API. As discussed in chapter 3 in practice code that is compiled to WebAssembly modules come packaged with a JavaScript file. This file contains the library functions that are exposed to the programmer, where internally these functions handle the interaction with WebAssembly. This allows users of the library to be oblivious of the fact that WebAssembly is being used under the hood, much in the same way that some Python developers are oblivious that numpy is running compiled C under the hood.
+In order to make Futhark a practical language for writing libraries that can be called in the browser it is important that it has a simple and efficient API. As discussed in chapter 3 in practice code that is compiled to WebAssembly modules come packaged with a JavaScript file. This file contains the library functions that are exposed to the programmer, where internally these functions handle the interaction with WebAssembly. This allows users of the library to be oblivious of the fact that WebAssembly is being used under the hood, much in the same way that some Python developers are oblivious that numpy is running compiled C under the hood.
 
 A succesful API for calling Futhark in the browser will have the following properties
 \begin{enumerate}
-    \item It should work well with the most commonly used JavaScript number and array data types.
+    \item It should be convenient, seamlessly integrating with the most commonly used JavaScript number and array data types.
     \item The API should be efficient both with respect to memory usage and runtime speed.
-    \item Finally the API should minimize set up and tear down code.
+    \item Finally the API should minimize boiler plate code.
 \end{enumerate}
 
 \section{Comparing Futhark APIs}
@@ -398,14 +406,19 @@ entry scale (scalar : f32) (matrix : [][]f32) =
 \end{verbatim}
 This program scale.fut multiplies each element of a matrix by a scalar, and returns the scaled matrix. The implementation isn't important as this code is generated by Futhark. What is important is the way we can pass arguments and capture the return values from this function in the target language. 
 
+TODO: also introduce simple increment example
+
 \subsection{C API}
+
+TODO: do increment example first
+
 When scale.fut is compiled as a C library, the files scale.c and scale.h are generated. The implementation and header files respectively. Listing \ref{lst:c-api} is a C program that interfaces with the generated library. 
 
 
 \begin{listing}[H] 
         \inputminted[fontsize=\small,baselinestretch=0.5,linenos]{C}{code/compiler/api_examples/example.c}
-                \label{lst:c-api}    
         \caption{C code for interacting with the C API of the compiled program scale.fut }
+                        \label{lst:c-api}    
 \end{listing} 
 
 At the top level the API works off of a context and a configuration, futhark\_context, and futhark\_context\_config. The configuration stores choices like debugging. The context manages global information and bookkeeping. Including logging and profiling, and a mutex to guarantee thread safety when used from multiple threads. The API has functions to create these at the beginning and free them at the end. 
@@ -581,13 +594,15 @@ Gives the shape of the FutharkArray as an array of BigInts.
 \subsubsection*{futharkType()}
 Returns the futhark type of the elements as a string, i.e. "bool", "u32", "i8", etc.
 
+\subsection{Memory Management}
 
+Unfortunately WebAssembly does not have garbage collection. This means that the programmer is responsible for doing this manually. The JavaScript API introduced 3 classes, FutharkContext, FutharkArray, and FutharkOpaque. Each has a free method, which the API user must call manually to free underlying memory on the Emscripten memory heap. 
 
-
+TODO: point to a code listing that does this.
 
 %This chapter discusses the implementation of the initial WASM backend. It discusses the design choices made with considerations to code maintenance, performance, and practical usability. 
 
-%\chapter{Implementation}
+\chapter{Implementation}
 
 \section{WebAssembly Code Generation}
 
@@ -605,12 +620,12 @@ Emscripten provides the facilities for going from C source code to WASM. The alt
 
 Conveniently the Emscripten compiler is a full fledged production ready C and C++ to WASM compiler, used by the likes of Google, and Mozilla. In order to test the viability of taking generated C source code and passing it through the Emscripten compiler, some exploratory testing was necessary.
 
-The simplest Futhark program takes no arguments and simply returns a constant. 
+The following minimal program takes a 32 bit integer and returns the successor.
 \begin{listing}[H]
 \begin{minted}{Haskell}
-let main = 1i32
+entry increment (a : i32) = a + 1
 \end{minted}
-\caption{Futhark program returning 1}
+\caption{Futhark implementation of the increment function}
 \label{lst:simp}
 \end{listing}
 
@@ -659,20 +674,28 @@ With these fixes a programmer familiar with the semantics of the Emscripten heap
 
 When Emscripten compiles C code it generates two files. One is a WASM module, which contains the instructions for computing the functions described in the C source code. The other file is JavaScript glue code, which is used to take care of loading the WASM file, as well as handling any JavaScript calls that the WASM module might use.
 
-TODO show scale.fut from bare bones wasm and js. and how one would call it from JS in that case.
+The WebAssembly module has methods for each function that appears in our .c file, plus some system library functions like malloc and free. To call these functions from JavaScript we must tell Emscripten with the '-s EXPORTED\_FUNCTIONS' compiler flag to export them. The method names are all prefixed with underscore.
 
-\begin{verbatim}
-futhark_values_raw_f32_2d =
-Module.cwrap(
-    'futhark_values_raw_f32_2d', 'number', ['number', 'number']
-);
-\end{verbatim}
+Common operations for interacting with the WebAssembly module are copying data to and from the Emscripten heap. For this reason we provide two helper functions: copyToHeap allocates space on the heap and copies bytes from a typed array, and viewHeap returns a typed array which presents a view to underlying bytes on the heap. These functions can be seen in \ref{lst:heap-helpers}.
 \begin{listing}[H] 
         \inputminted[fontsize=\small,baselinestretch=0.5,linenos]{JavaScript}{code/compiler/api_examples/heap-helpers.js}
         \caption{Heap helper functions}
         \label{lst:heap-helpers}    
 \end{listing} 
+Emscripten also offers the getValue function to read a scalar of a specified type stored on the Emscripten heap. For example the function call 'getValue(ptr, 'i32')' reads a 32 bit signed integer from the heap at the memory location given by ptr. We will use this to read pointers off the heap. Pointers default to 32-bit signed integers in WebAssembly.\footnote{TODO: wasm64}
 
+
+Given all this we can now work with Futhark from JavaScript and do the equivalent of listing \ref{lst:c-api-incr}.
+Listing \ref{lst:c-api-incr} showed how to call Futhark's generated C library from the increment.fut example. After compiling the C library to WASM with Emscripten, the library can be called with the JavaScript equivalent shown in \ref{lst:raw_incr}. (TODO: reflect and possible reword)
+
+\begin{listing}[H] 
+        \inputminted[fontsize=\small,baselinestretch=0.5,linenos]{JavaScript}{code/compiler/api_examples/raw_incr.js}
+        \caption{Working with raw Emscripten for the increment function}
+        \label{lst:raw_incr}    
+\end{listing} 
+
+This is basically a one to one match of the C equivalent from listing \ref{lst:c-api-incr}. This is quite cumbersome for a function that simply takes a single integer argument and returns a single integer. 
+Listing \ref{lst:c-api} 
 
 \begin{listing}[H] 
         \inputminted[fontsize=\small,baselinestretch=0.5,linenos]{JavaScript}{code/compiler/api_examples/raw.js}
@@ -680,11 +703,30 @@ Module.cwrap(
         \label{lst:raw}    
 \end{listing} 
 
-Pointers are complicated as they must be tracked on the Emscripten heap. Working with pointers in JavaScript like this is both not idiomatic and not safe. For Futhark to be practical the implementation details of the raw pointers to the heap should be extracted away, and should be shielded by a layer of abstraction.
+TODO say this is basically 1-1 match of the C equivalent.
 
-TODO: write text expressing how now we want to go from this to our API designed in previous section. 
+TODO put C snippet and JS snippet that we discuss as being extra bad here so the reader can see it.
 
-TODO explain FutharkArray
+
+Pointers are complicated as they must be tracked on the Emscripten heap. Working with pointers in JavaScript like this is both not idiomatic and not safe. Not only is the JavaScript as tedious as the original C code with respect to manual memory management, it is even worse. This is illustrated in lines 10 to 15. The out\_ptr, which is allocated and freed with \_malloc and \_free, is an additional complication to work around the fact that the result value must be placed into the Emscripten heap. This isn't the case in C because of the shared address space between the caller and the library function. This allows the caller to pass a pointer to a stack allocated result variable. 
+
+
+
+This pain point was one of motivating reasons for the design of the API. For Futhark to be practical the implementation details of the raw pointers to the heap should hidden by a layer of abstraction. This is precisely what the API designed in Chapter 4 accomplished. 
+
+
+
+\begin{listing}[H] 
+        \inputminted[fontsize=\small,baselinestretch=0.5,linenos]{JavaScript}{code/compiler/api_examples/FutharkContext_incr.js}
+        \caption{FutharkContext class for the futhark increment function}
+        \label{lst:FutharkContext_incr}    
+\end{listing} 
+
+
+
+
+
+
 
 \begin{listing}[H] 
         \inputminted[fontsize=\small,baselinestretch=0.5,linenos]{JavaScript}{code/compiler/api_examples/FutharkArray.js}
@@ -699,6 +741,8 @@ TODO explain FutharkContext
         \caption{Class FutharkContext}
         \label{lst:FutharkContext}    
 \end{listing} 
+
+TODO opaque types
 
 
 \section{Compiler Pipeline}
