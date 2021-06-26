@@ -4,7 +4,7 @@ function viewHeap(ptr, array_type, length) {
 
 function copyToHeap(ta) {
   var bytes = new Uint8Array(ta.buffer, ta.byteOffset, ta.byteLength);
-  var ptr = Module._malloc(bytes.length);
+  var ptr = _malloc(bytes.length);
   Module.HEAPU8.set(bytes, ptr);
   return ptr;
 }

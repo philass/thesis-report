@@ -219,34 +219,6 @@ WebAssembly aims to define a portable binary format that can be run in the web w
 \section{WebAssembly Module Structure}
 
 WebAssembly files are segmented into sections. The segmentation of these sections is done so that loading a WASM file is efficient as possible. The sections are structured such that the byte code be compiled in a single pass, and in parallel. Furthermore the code can be parsed and compiled before the complete WASM file has been downloaded, reducing the instantiation time of a WebAssembly module. 
-%\begin{table}[]
-%\begin{tabular}{|l|l|}
-%\hline
-%ID & Section          \\ \hline
-%0  & custom section   \\ \hline
-%1  & typ section      \\ \hline
-%2  & import section   \\ \hline
-%3  & function section \\ \hline
-%4  & table section    \\ \hline
-%5  & memory section   \\ \hline
-%6  & global section   \\ \hline
-%7  & export section   \\ \hline
-%8  & start section    \\ \hline
-%9  & element section  \\ \hline
-%10 & code section     \\ \hline
-%11 & data section     \\ \hline
-%12 & count section    \\ \hline
-%\end{tabular}
-%\end{table}
-
-A WebAssembly module is split into different sections. These sections are split into two types of sections, known and custom sections. If a known section is included, it can only be included once, and most appear in a strict order. Where as custom sections can be included multiple times. Custom sections are just an arbitrary set of bytes that carry no meaning to WASM but can be useful for third party users. 
-
-\begin{enumerate}
-\addtocounter{enumi}{-1}
-\item Custom section: 
-\item 
-\end{enumerate}
-
 
 WebAssembly supports 4 number types.
 \begin{verbatim}
@@ -676,17 +648,15 @@ When Emscripten compiles C code it generates two files. One is a WASM module, wh
 
 The WebAssembly module has methods for each function that appears in our .c file, plus some system library functions like malloc and free. To call these functions from JavaScript we must tell Emscripten with the '-s EXPORTED\_FUNCTIONS' compiler flag to export them. The method names are all prefixed with underscore.
 
-Common operations for interacting with the WebAssembly module are copying data to and from the Emscripten heap. For this reason we provide two helper functions: copyToHeap allocates space on the heap and copies bytes from a typed array, and viewHeap returns a typed array which presents a view to underlying bytes on the heap. These functions can be seen in \ref{lst:heap-helpers}.
-\begin{listing}[H] 
-        \inputminted[fontsize=\small,baselinestretch=0.5,linenos]{JavaScript}{code/compiler/api_examples/heap-helpers.js}
-        \caption{Heap helper functions}
-        \label{lst:heap-helpers}    
-\end{listing} 
-Emscripten also offers the getValue function to read a scalar of a specified type stored on the Emscripten heap. For example the function call 'getValue(ptr, 'i32')' reads a 32 bit signed integer from the heap at the memory location given by ptr. We will use this to read pointers off the heap. Pointers default to 32-bit signed integers in WebAssembly.\footnote{TODO: wasm64}
+
+Emscripten also offers the getValue function to read a scalar of a specified type stored on the Emscripten heap. For example the function call 'getValue(ptr, 'i32')' reads a 32 bit signed integer from the heap at the memory location given by ptr.
 
 
-Given all this we can now work with Futhark from JavaScript and do the equivalent of listing \ref{lst:c-api-incr}.
-Listing \ref{lst:c-api-incr} showed how to call Futhark's generated C library from the increment.fut example. After compiling the C library to WASM with Emscripten, the library can be called with the JavaScript equivalent shown in \ref{lst:raw_incr}. (TODO: reflect and possible reword)
+
+
+
+
+Given all this we can now work with Futhark from JavaScript and do the equivalent of listing \ref{lst:c-api-incr}. Listing \ref{lst:c-api-incr} showed how to call Futhark's generated C library from the increment.fut example. After compiling the C library to WASM with Emscripten, the library can be called with the JavaScript equivalent shown in listing \ref{lst:raw_incr}.
 
 \begin{listing}[H] 
         \inputminted[fontsize=\small,baselinestretch=0.5,linenos]{JavaScript}{code/compiler/api_examples/raw_incr.js}
@@ -694,8 +664,20 @@ Listing \ref{lst:c-api-incr} showed how to call Futhark's generated C library fr
         \label{lst:raw_incr}    
 \end{listing} 
 
-This is basically a one to one match of the C equivalent from listing \ref{lst:c-api-incr}. This is quite cumbersome for a function that simply takes a single integer argument and returns a single integer. 
-Listing \ref{lst:c-api} 
+This is quite cumbersome for a function that simply takes a single integer argument and returns a single integer.
+The program is basically a one to one match of the C equivalent from listing \ref{lst:c-api-incr}, including passing around pointers, which is unsafe and not idiomatic in JavaScript.
+The allocation and freeing of out\_ptr in lines 5 and 8 are even worse than the equivalent C. They are needed because the output 32-bit integer parameter can only write to the Emscripten heap and therefore the caller must explicitly allocate and free the 4 bytes, and copy out the result with getValue. This isn't the case in C because of the shared address space between the caller and the library function, allowing the caller to pass a pointer to a stack allocated result variable.
+
+The picture gets even worse when the Futhark entry points accept and return array arguments.
+These necessitate copying array contents to and from the Emscripten heap, exacerbating the C like manual memory management which is a poor fit in JavaScript. 
+To contain this complexity we provide two helper functions: copyToHeap allocates space on the heap and copies bytes from a typed array, and viewHeap returns a typed array which presents a view to underlying bytes on the heap. These functions can be seen in listing \ref{lst:heap-helpers}.
+\begin{listing}[H] 
+        \inputminted[fontsize=\small,baselinestretch=0.5,linenos]{JavaScript}{code/compiler/api_examples/heap-helpers.js}
+        \caption{Heap helper functions}
+        \label{lst:heap-helpers}    
+\end{listing} 
+
+With these functions we can illustrate how to work with the more complex scale.fut from listing \ref{lst:c-api}. As a reminder the futhark function takes a 2d array of floats and a scalar float as input and returns a 2d array of floats that is element wise scaled by the scalar. 
 
 \begin{listing}[H] 
         \inputminted[fontsize=\small,baselinestretch=0.5,linenos]{JavaScript}{code/compiler/api_examples/raw.js}
@@ -703,16 +685,9 @@ Listing \ref{lst:c-api}
         \label{lst:raw}    
 \end{listing} 
 
-TODO say this is basically 1-1 match of the C equivalent.
+The JavaScript is as tedious as the original C code with respect to manual memory management and, like in the previous example, needs to allocate and free memory on the Emscripten heap to retrieve the out\_ptr output parameter. In this example the output parameter is an array pointer. Pointers default to 32-bit signed integers in WebAssembly.\footnote{TODO: wasm64}
 
-TODO put C snippet and JS snippet that we discuss as being extra bad here so the reader can see it.
-
-
-Pointers are complicated as they must be tracked on the Emscripten heap. Working with pointers in JavaScript like this is both not idiomatic and not safe. Not only is the JavaScript as tedious as the original C code with respect to manual memory management, it is even worse. This is illustrated in lines 10 to 15. The out\_ptr, which is allocated and freed with \_malloc and \_free, is an additional complication to work around the fact that the result value must be placed into the Emscripten heap. This isn't the case in C because of the shared address space between the caller and the library function. This allows the caller to pass a pointer to a stack allocated result variable. 
-
-
-
-This pain point was one of motivating reasons for the design of the API. For Futhark to be practical the implementation details of the raw pointers to the heap should hidden by a layer of abstraction. This is precisely what the API designed in Chapter 4 accomplished. 
+These pain points were motivating reasons for the design of the API. Even with the two helper functions we defined to simplify memory copies and reads, working with the raw functions from Emscripten is only accessible to programmers with a strong understanding of memory in WebAssembly. This isn't reasonable as inter-operation between Futhark and JavaScript is a determining factor in whether Futhark is a good language for writing code to run in the browser. For Futhark to be practical the implementation details of the raw pointers to the heap should hidden by a layer of abstraction. This is precisely what the API designed in Chapter 4 accomplished. 
 
 
 
