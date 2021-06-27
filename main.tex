@@ -303,10 +303,12 @@ The most important details of the function implementation for understanding WebA
 the ending 1 sets the size of the memory heap to be 1 page of memory. For WebAssembly 1 page corresponds to 64 kilobytes. Memory is always set to an integral number of pages.
 
 
-\section{WASM and JavaScript interop}
+\section{WebAssembly and JavaScript interaction}
 
 WebAssembly defines a relatively small set of instructions, which runtimes can translate to native code quickly. However because of this it is unable to complete many of the basic functions of JavaScript. The most clear cut example of this is not having access to the DOM. 
 WebAssembly does not have direct access to Web APIs. However it can call imported JavaScript functions. This is the facility that allows it to interact with Web APIs. This simple design feature is incredibly powerful. It is this feature that enables threaded WebAssembly as it can leverage JavaScript's ability to spawn web workers. This will be discussed in greater detail in Chapter 6.
+
+In order to call WebAssembly from JavaScript we must first download 
 
 \section{Performance}
 
@@ -315,6 +317,39 @@ The performance of WebAssembly
 \section{WASM as a library}
 
 For most practical use cases WebAssembly modules are used as libraries. When compiling C to WASM as a library the Emscripten compiler generates two files. One is a WebAssembly module and the other is JavaScript glue code. This allows web programmers to access all the important elements of WASM from a set of JavaScript functions that the Emscripten runtime defines. This is beneficial for multiple reasons. Firstly working directly with WebAssembly modules is a layer of detail most web developers would like to avoid. Secondly this approach allows a programmer to simply compile their C library and call it from JavaScript. 
+
+
+\section{Emscripten}
+
+Emscripten compiles C/C++ to WebAssembly. It is however impractical to work with WebAssembly as a module by itself. There are many low level details in terms of interacting with memory and instantiating a WebAssembly module that programmers would like to avoid. For this reason it can also generate JavaScript, and HTML code alongside a WebAssembly Module. For most practical purposes it is the JavaScript and WebAssembly that is desired, but the HTML can be convenient for quickly testing and validating the generated code. 
+
+For many use cases compiling code to a library is desirable. This way a programmer can write source code in C/C++ that contain functions for compute intensive parts of their application. They can then generate WebAssembly modules that can be called from JavaScript, and offload the computation to WebAssembly. 
+
+Its relatively straight forward to call simple C functions from JavaScript when they are compiled with Emscripten. We explicitly export the functions at compile time. At this stage we have access these methods through a JavaScript method. These methods wrap the calls to the WebAssembly modules, meaning we don't have to ever directly access them.
+
+If we have a simple C file that contains an add function.
+\begin{verbatim}
+int add(int a, int b) {
+  return a + b;
+}
+\end{verbatim}
+We simply compile with Emscripten while making sure to export the function. We also use the Modularize flag, to make the WebAssembly Module easier to import. This is helpful because WebAssembly is loaded asynchronously. With the Modularize flag we are able to get the module as a promise.
+
+\begin{verbatim}
+var load_module = require('./example.js');
+
+load_module().then((instance) => {
+  console.log(instance._add(4, 6));
+});
+\end{verbatim}
+
+The load\_module is a factory function. Once the WebAssembly Module is loaded we run the code in the callback. The actual logic for running the C function is just the one line
+\begin{verbatim}
+ console.log(instance._add(4, 6));
+\end{verbatim}
+
+The functions are easy to use when they take integer arguments and have integer return types. However lots of C/C++ works with pointers. Strings are effectively s
+
 
 \section{WebAssembly in the browser}
 
@@ -335,7 +370,7 @@ WebAssembly executes within a sand-boxed stack-based environment, which means th
 
 \chapter{API Design}
 
-TODO make sure that in previous chapter we explictly explain why WebAssembly is better than JavaScript. 
+TODO make sure that in previous chapter we explicitly explain why WebAssembly is better than JavaScript. 
 
 
 
@@ -687,9 +722,13 @@ With these functions we can illustrate how to work with the more complex scale.f
 
 The JavaScript is as tedious as the original C code with respect to manual memory management and, like in the previous example, needs to allocate and free memory on the Emscripten heap to retrieve the out\_ptr output parameter. In this example the output parameter is an array pointer. Pointers default to 32-bit signed integers in WebAssembly.\footnote{TODO: wasm64}
 
+Yet another complication is error handling. In listings 7 and 9 we omitted checking the return error code from the entry point functions and extracting the error message. 
+
 These pain points were motivating reasons for the design of the API. Even with the two helper functions we defined to simplify memory copies and reads, working with the raw functions from Emscripten is only accessible to programmers with a strong understanding of memory in WebAssembly. This isn't reasonable as inter-operation between Futhark and JavaScript is a determining factor in whether Futhark is a good language for writing code to run in the browser. For Futhark to be practical the implementation details of the raw pointers to the heap should hidden by a layer of abstraction. This is precisely what the API designed in Chapter 4 accomplished. 
 
+In the following we will illustrate with examples how our Javascript API wraps the WASM module and JavaScript glue code generated by Emscripten.
 
+The simplest case is when all entry point inputs and outputs are scalar as in the increment function. In this case the following FutharkContext class meets the specification of the API.
 
 \begin{listing}[H] 
         \inputminted[fontsize=\small,baselinestretch=0.5,linenos]{JavaScript}{code/compiler/api_examples/FutharkContext_incr.js}
@@ -697,10 +736,12 @@ These pain points were motivating reasons for the design of the API. Even with t
         \label{lst:FutharkContext_incr}    
 \end{listing} 
 
+The class has two fields "cfg" and "ctx", that point to the config and context and are created in the constructor by calling functions from the C API. Observe how the increment methods successfully hides all the tedious details needed to call the underlying exported WebAssembly function "\_futhark\_entry\_increment". The reason we can do this is because it has access to the "ctx" class field. Without a class this was something that the programmer was forced to pass around. This is why the API was designed to access Futhark entry point functions as methods on the FutharkContext class. The other important benefit of the wrapper is that the results are simply returned instead of the cumbersome heap allocation and copying required to call the WASM function.
 
 
+We will now consider array inputs and outputs to entry point functions. 
 
-
+The FutharkArray class represents any array regardless of dimension and element type, somewhat like Python ndarrays. Listing \ref{lst:FutharkArray} below shows our implementation.
 
 
 \begin{listing}[H] 
@@ -708,6 +749,21 @@ These pain points were motivating reasons for the design of the API. Even with t
         \caption{Class FutharkArray}
         \label{lst:FutharkArray}    
 \end{listing} 
+
+An instance is constructed with not only a pointer to the underlying Futhark array on the Emscripten heap, but also type information and the functions for manipulating the Futhark array itself. 
+While this design choice leads to many fields and constructor arguments it has the advantage that we do not need to generate a class per array type.
+
+The constructor and all the fields are effectively hidden from the API user in that they are never needed to use the API. In other languages these fields and methods would be private or otherwise hidden from the user. Unfortunately JavaScript doesn't provide information hiding facilities.
+
+The fshape and fvalues functions are exported WebAssembly functions to access the shape and contents of the underlying Futhark array in the Emscripten heap. Similarly, the ffree function is the function to free the array. In the case of 2 dimensional f32 arrays, as in the scale.fut example, these functions are _futhark_shape_f32_2d, _futhark_values_raw_f32_2d, _futhark_free_f32_2d, as can be seen in line 17 in Listing 12 below, where the FutharkArray is constructed.
+
+The heap argument in the constructor is the heap view corresponding to the array element type e.g HEAPF32 corresponds to f32. The full mapping of the heap views to Futhark types can be seen in listing \ref{lst:heapviews}.
+The "toTypedArray" method uses the heap view to return a heap subarray which is a view into the heap (no underlying memory is copied).
+
+The toArray function calls toTypedArray to get the view of the underlying values. Through a recursive function call a regular JavaScript array is constructed with each row ... Array.from slice TODO Philip
+
+
+
 
 TODO explain FutharkContext
 
@@ -807,9 +863,9 @@ The Tunnel Benchmark shows that the WASM backend takes approximately 65\% perfor
     \begin{tabular}{|l|l|l|l|l|l|}
     \hline
     Suite      & Dataset                     & Size & C        & WASM     & chrome \\ \hline
-    \multirow{3}{*}{Accelerate} & \multirow{3}{*}{Mandelbrot} & 1000 & 131 ms   & 149 ms  & TODO ms  \\ \cline{3-6} 
-               &                             & 2000 & 530 ms  & 602 ms  & TODO ms    \\ \cline{3-6} 
-               &                             & 4000 & 2,117 ms & 2,403 ms & TODO ms   \\ \hline
+    \multirow{3}{*}{Accelerate} & \multirow{3}{*}{Mandelbrot} & 1000 & 131 ms   & 149 ms  & 155 ms  \\ \cline{3-6} 
+               &                             & 2000 & 530 ms  & 602 ms  & 601 ms    \\ \cline{3-6} 
+               &                             & 4000 & 2,117 ms & 2,403 ms & 2446 ms   \\ \hline
     \end{tabular}%
     }
     \caption{Caption}
@@ -967,6 +1023,10 @@ When pthread\_create() is called, if we need to create a new Web Worker, then th
 
 
 
+\subsection{Applications}
+
+In order to see the WebAssembly multicore code in action, we will use ray tracing as a motivating example. 
+
 
 \subsection{Running in browser with HTTP}
 
@@ -981,6 +1041,21 @@ When pthread\_create() is called, if we need to create a new Web Worker, then th
 \end{figure}
 
 \section{Benchmark}
+
+\begin{table}[h!]
+    \noindent\makebox[\textwidth]{%
+    \begin{tabular}{|l|l|l|l|l|l|}
+    \hline
+    Suite      & Dataset                     & Size & C        & WASM     & chrome \\ \hline
+    \multirow{3}{*}{Accelerate} & \multirow{3}{*}{Mandelbrot} & 1000 & 14.7 ms   & 39 ms  & 27 ms  \\ \cline{3-6} 
+               &                             & 2000 & 53 ms  & 103 ms  & 104 ms    \\ \cline{3-6} 
+               &                             & 4000 & 211 ms & 412 ms & 532 ms   \\ \hline
+    \end{tabular}%
+    }
+    \caption{Caption}
+    \label{tab:my_label}
+\end{table}
+
 \chapter{Conclusion}
 
 TODO

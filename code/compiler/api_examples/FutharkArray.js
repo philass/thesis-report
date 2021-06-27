@@ -1,10 +1,10 @@
 class FutharkArray {
-  constructor(ctx, ptr, type_name, dim, array_type, fshape, fvalues, ffree) {
+  constructor(ctx, ptr, type_name, dim, heap, fshape, fvalues, ffree) {
     this.ctx = ctx;
     this.ptr = ptr;
     this.type_name = type_name;
     this.dim = dim;
-    this.array_type = array_type;
+    this.heap = heap;
     this.fshape = fshape;
     this.fvalues = fvalues;
     this.ffree = ffree;
@@ -12,13 +12,14 @@ class FutharkArray {
   futharkType() { return this.type_name; }
   free() { this.ffree(this.ctx, this.ptr); }
   shape() {
-    var s = this.fshape(this.ctx, this.ptr);
-    return Array.from(viewHeap(s, BigUint64Array, this.dim));
+    var s = this.fshape(this.ctx, this.ptr) >> 3;
+    return Array.from(HEAP64.subarray(s, s + this.dim));
   }
   toTypedArray(dims = this.shape()) {
+    console.assert(dims.length === this.dim);
     var length = Number(dims.reduce((a, b) => a * b));
-    var v = this.fvalues(this.ctx, this.ptr);
-    return viewHeap(v, this.array_type, length);
+    var v = this.fvalues(this.ctx, this.ptr) / this.heap.BYTES_PER_ELEMENT;
+    return this.heap.subarray(v, v + length);
   }
   toArray() {
     var dims = this.shape();

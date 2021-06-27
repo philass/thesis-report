@@ -9,11 +9,8 @@ class FutharkContext {
   }
   increment(in0) {
     var out0 = _malloc(4);
-    if (_futhark_entry_increment(this.ctx, out0, in0) > 0) {
-      _free(out0);
-      throw "Bad call to futhark increment";
-    }
-    var result0 = viewHeap(out0, Int32Array, 1)[0];
+    _futhark_entry_increment(this.ctx, out0, in0);
+    var result0 = HEAP32[out0 >> 2];
     _free(out0);
     return result0;
   }
