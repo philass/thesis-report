@@ -23,7 +23,7 @@ class FutharkContext {
       in1 = this.new_f32_2d_from_jsarray(in1);
       to_free.push(in1);
     }
-    futhark_entry_scale(this.ctx, ...out, in0, in1.ptr);
+    futhark_entry_scale(this.ctx, out0, in0, in1.ptr);
     var result0 = this.new_f32_2d_from_ptr(HEAP32[out0 >> 2]);
     _free(out0);
     to_free.forEach(f => f.free());
