@@ -429,7 +429,7 @@ To illustrate how to pass pointer arguments, consider the simple C string functi
 
 To use this function the caller will need to use the malloc and free to system library functions, so we export those alongside concat when we compile to a library with Emscripten:
 \begin{verbatim}
-emcc concat.c -o concat.js -s MODULARIZE \ -s EXPORTED_FUNCTIONS=[_malloc,_free,_concat]
+emcc concat.c -o concat.js -s MODULARIZE \textbackslash -s EXPORTED_FUNCTIONS=[_malloc,_free,_concat]
 \end{verbatim}
 
 The following Node.js program calls concat:
