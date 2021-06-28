@@ -94,10 +94,38 @@ The implementation and generated WebAssembly code is benchmarked for both browse
 
 \chapter{Introduction}
 
-TODO motivation and goals
+Futhark is a high-performance purely functional data-parallel array programming language targeting parallel compute hardware.
+
+...
+
+%MOTIVATION
+
+The last two decades have seen the proliferation of devices---laptops, tablets, phones---with parallel computing capabilities with GPUs and multicore CPUs.
+A large fraction of today's software runs in the browser.
+
+%A large fraction of today's software runs in the browser, and the underlying hardware of the laptops, tablets, and mobile phones that run these browsers have increasingly parallel computing capabilities with GPUs and multicore CPUs. 
+
+TODO: discuss the challenge of programming browsers to take advantage of the hw
+
+TODO: mention the ubiquity and inefficiency of JS
+
+As such there is heavy development of standardized browser APIs to harness these parallel architectures more efficiently than JavaScript. One of the technologies that is getting traction and adoption is WebAssembly which offers near-native single threaded execution speeds in browsers. It is supported by all modern browsers and is the target of compilers for many major programming languages. WebAssembly has experimental support for multithreaded execution with the parallel extension called threaded WebAssembly. It has working compiler and browser support.
+
+TODD: mention that WASM is low level, not meant for coding by hand, and therefore a higher level PL is required
+
+TODO: argue why Futhark is an interesting source language
+
+%GOALS
+
+The goal of this thesis is to extend high level and high performance parallel programming to modern consumer devices.
+
+%by compiling the functional data-parallel programming language Futhark to WASM and threaded WASM for efficient execution in web browsers on multicore CPUs.
+
+This thesis is a contribution towards extending high level and high performance parallel programming to modern consumer devices by compiling the functional data-parallel programming language Futhark to WASM and threaded WASM for efficient execution in web browsers on multicore CPUs.
 
 
-A large percentage of today's software is run in the browser, and the underlying hardware of the laptops and mobile phones that run these browser have increasingly parallel compute with GPU's and multicore CPU's. As such there is heavy development of standardized cross browser Web API's to harness these parallel architectures. One of these technologies is threaded WebAssembly. %This thesis develops WebAssembly and threaded WebAssembly backends for the Futhark programming language, leveraging both parallel computing and browsers as a target architecture.
+
+%A large percentage of today's software is run in the browser, and the underlying hardware of the laptops and mobile phones that run these browser have increasingly parallel compute with GPU's and multicore CPU's. As such there is heavy development of standardized cross browser Web API's to harness these parallel architectures. One of these technologies is threaded WebAssembly. %This thesis develops WebAssembly and threaded WebAssembly backends for the Futhark programming language, leveraging both parallel computing and browsers as a target architecture.
 
 
 
@@ -175,6 +203,11 @@ The portability and execution speed have also led to adoption beyond browsers wi
 %Edge Computing 
     % Doing network computation at 'local' nodes to increase response times over cloud computing
     % Especially wrt. data intensive applications, e.g., IoT/Smart Homes/Smart Grids/ 
+    
+    % Example Fastly supports web assemply for the security of sand-boxed execution environment of the virtual machime
+    
+%Dfinity 
+    % Secure blockchain based distributed infrastructure for second coming of the internet
 
 %\section{LLVM}
 
@@ -344,24 +377,69 @@ int add(int a, int b) {
   return a + b;
 }
 \end{verbatim}
-We simply compile with Emscripten while making sure to export the function. We also use the Modularize flag, to make the WebAssembly Module easier to import. This is helpful because WebAssembly is loaded asynchronously. With the Modularize flag we are able to get the module as a promise.
-
+We simply compile with Emscripten to a library while making sure to export the function.
+\begin{verbatim}
+emcc example.c -o example.js -s EXPORTED_FUNCTIONS=[_add] -s MODULARIZE
+\end{verbatim}
+We also use the MODULARIZE flag, to make the WebAssembly Module easier to import. This is helpful because WebAssembly is loaded asynchronously. With the MODULARIZE flag we are able to get the module as a promise. The following code runs in Node.js:
 \begin{verbatim}
 var load_module = require('./example.js');
-
 load_module().then((instance) => {
   console.log(instance._add(4, 6));
 });
 \end{verbatim}
-
-The load\_module is a factory function. Once the WebAssembly Module is loaded we run the code in the callback. The actual logic for running the C function is just the one line
+The load\_module is a factory function. Once the WebAssembly Module is loaded we run the code in the callback. The actual logic for running the C function is just the one line:
 \begin{verbatim}
- console.log(instance._add(4, 6));
+  console.log(instance._add(4, 6));
+\end{verbatim}
+The example library can also be loaded as a script in a web page and invoked from JavaScript in the browser. This will be shown in the Mandelbrot example in Section (TODO) below.
+
+The functions are easy to use when they take integer arguments and have integer return types. However lots of C/C++ works with pointers. Emscripten models that with locations in a single memory region attached to the WASM module. This memory region is called the heap. Emscripten offers multiple views into the heap with a typed array for each primitive element type, namely those supported by JavaScript typed arrays. See Table \ref{table:heapviews}.
+Note that pointers default to 32-bit signed integers in WebAssembly and are therefore written to and read from memory using the HEAP32 heap view.\footnote{TODO: wasm64}
+
+\begin{listing}[H] 
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|r|}
+\hline
+\textbf{Heap view} & \textbf{JavaScript type} \\ \hline
+HEAP8 & Int8Array \\ \hline
+HEAP16 & Int16Array \\ \hline
+HEAP32 & Int32Array \\ \hline
+HEAP64 & BigInt64Array \\ \hline
+HEAPU8 & Int8Array \\ \hline
+HEAPU16 & Uint16Array \\ \hline
+HEAPU32 & Uint32Array \\ \hline
+HEAPU64 & BigUint64Array \\ \hline
+HEAPF32 & Float32Array \\ \hline
+HEAPF64 & Float64Array \\ \hline
+\end{tabular}
+\end{table}
+\caption{Emscripten's heap views and their JavaScript types}
+\label{table:heapviews}
+\end{listing}
+
+To illustrate how to pass pointer arguments, consider the simple C string function in Listing \ref{lst:concat-c} that takes two strings and return their concatenation into allocated memory that the caller must free.
+
+\begin{listing}[H] 
+\inputminted[fontsize=\small,baselinestretch=0.5,linenos]{C}{code/examples/emcc/concat.c}
+\caption{C concat function }
+\label{lst:concat-c}    
+\end{listing} 
+
+To use this function the caller will need to use the malloc and free to system library functions, so we export those alongside concat when we compile to a library with Emscripten:
+\begin{verbatim}
+emcc concat.c -o concat.js -s MODULARIZE \ -s EXPORTED_FUNCTIONS=[_malloc,_free,_concat]
 \end{verbatim}
 
-The functions are easy to use when they take integer arguments and have integer return types. However lots of C/C++ works with pointers. Emscripten models that with locations in a single memory region attached to the WASM module. This memory region is called the heap. Emscripten offers multiple views into the heap with a typed array for each primitive element type, namely those supported by JavaScript type arrays, int8, f32, BigInt64, etc.
+The following Node.js program calls concat:
+\begin{listing}[H] 
+\inputminted[fontsize=\small,baselinestretch=0.5,linenos]{C}{code/examples/emcc/hello-world.js}
+\caption{Invocation of Emscripten compiled concat function }
+\label{lst:hello-world.js}    
+\end{listing} 
 
-TODO: heap types table and explanation of how to use them
+
 
 
 
@@ -865,15 +943,15 @@ Emscripten provides facilities for combining the JavaScript glue code with a lib
 Figure \ref{fig:wasm} illustrates the logical flow of the compilation of the WASM backend. 
 
 \begin{figure}[htbp]
-\centerline{\includegraphics[width=\textwidth]{figures/WASM_MC_compiler.png}}
-\caption{WASM-multicore compilation}
+\centerline{\includegraphics[width=\textwidth]{figures/compiler_pipeline.png}}
+\caption{Sequential WASM backend compiler pipeline}
 \label{fig:wasm}
 \end{figure}
 
 The source program is turned into Futhark's intermediate representation, and than into C source code from there. Where as the runtime classes that the WASM backend generates only depend only depend on a the function names, argument types, and return types, which can easily be taken from the IR. At this stage both the C source code and the API are joined together with the EMCC command, generating glue code with the attached runtime code, and a WASM module. 
 
 \subsection{Emscripten Compiler Flags}
-The Emscripten compiler provides a large number of flags that effect the usage and the performance of the generated WASM code. Some of the flags are specific to the use case, in which case it makes sense to give the programmer flexibiliy in terms of what compiler flags they elect to use. For this reason the flags the backend implementation elects to only use few flags. As discussed previously in order for 64-bit integers to be handled correctly, the backend needs to use the WASM\_BIGINT flag. The other flag that it defaults to is the O3 optimization level. Though this obfuscates the resulting code, it comes with sizeable performance improvements over the other optimization levels.
+The Emscripten compiler provides a large number of flags that effect the usage and the performance of the generated WASM code. Some of the flags are specific to the use case, in which case it makes sense to give the programmer flexibiliy in terms of what compiler flags they elect to use. For this reason the backend implementation elects to only use few flags. As discussed previously in order for 64-bit integers to be handled correctly, the backend needs to use the WASM\_BIGINT flag. The other flag that it defaults to is the O3 optimization level. Though this obfuscates the resulting code, it comes with sizeable performance improvements over the other optimization levels. Most browsers will have means to automatically pretty print the obfuscated code.
 
 The most important flag for users of the WASM backend is the memory flag. The memory flag in Emscripten defaults to 16 megabytes, but with performance heavy computation it is likely that this limit will be exceeded. In these cases the user should manually set the memory based on their needs. It is recommended to use less than 2 gigabytes as only recently have virtual machines started to allow more than 2 gigabytes of heap space. This means that using more memory than 2gb's will likely not be portable across browsers and with different WASM engines. 
 
@@ -888,10 +966,39 @@ EMCFLAGS="-s MEMORY=((16777216 * 4))" futhark wasm --lib prog.fut
 Listing \ref{lst:fu-wasm-compile} shows an example of calling the backend with an additional compiler flag to set the memory limit higher. The additional compiler flags to Emscripten are passed through the environment variable EMCFLAGS. In this case the memory is increased to 64 megabytes.
 \section{Application}
 
-With the WASM backend implemented as described above, it can now be seen in action. One of the applications for high performance computing in the browser is graphics. Figure \ref{fig:mandelbrot} illustrates a Futhark program running in the browser for visualizing the mandelbrot set. First mandelbrot.fut file is compiled as a lib. Than a web server is launched. When the HTML in (TODO cite appendix) is run the webpage in figure \ref{fig:mandelbrot} is rendered.
+With the WASM backend implemented as described above, it can now be seen in action. One of the applications for high performance computing in the browser is graphics. Figure \ref{fig:mandelbrot} illustrates a Futhark program running in the browser for visualizing the mandelbrot set. 
+
+The full implementation of "mandelbrot.fut" can be found in the appendix TODO. Taking a look at the function signature:
+\begin{minted}{Haskell}
+let main (screenX: i64) (screenY: i64)
+         (depth: i32) (xmin: f32)
+         (ymin: f32) (xmax: f32)
+         (ymax: f32): [screenY][screenX]i32 =
+\end{minted}
+
+We note that the entry point functions take 7 input arguments. The first two arguments "screenX" and "screenY" specify the dimensions of the output. TODO explain mandelbrot set.
+
+We firstly compile the mandelbrot.fut file as a library:
+\begin{minted}{bash}
+futhark wasm --lib mandelbrot.fut
+\end{minted}
+This generates the files "mandelbrot.js" and "mandelbrot.wasm". At this stage we can write a HTML file to call the JavaScript API.
+TODO say something about it being listed in the appendix.
+
+\begin{listing}[H] 
+        \inputminted[fontsize=\small,baselinestretch=0.5,linenos]{HTML}{code/examples/HTML/mandelbrot.js}
+        \caption{HTML file for calling mandelbrot.js}
+        \label{lst:mandelbrot-html}    
+\end{listing}
+
+Listing \ref{lst:mandelbrot-html} is a webpage that takes 7 inputs from the user. One for each of the arguments in the "mandelbrot.fut" entry point function. The user can than click a button, which will than ran the Mandelbrot computation and visualization by calling the Futhark function.
 
 
-
+In order to run the code in the browser, we need to launch a web server. This can be done from Python with
+\begin{verbatim}
+python -m http.server
+\end{verbatim}
+After running the server, we can go the webpage in Chrome, or Firefox. Put in inputs and then press the button. At this stage once the mandelbrot computation is complete the computation will render in the page.
 \begin{figure}[htbp]
     \centering
     \includegraphics[scale=0.3]{figures/mandelbrot.png}
@@ -899,13 +1006,21 @@ With the WASM backend implemented as described above, it can now be seen in acti
     \label{fig:mandelbrot}
 \end{figure}
 
-The only Futhark specific code required in to get the values to render is given below. The code is easy to call, and clearly hides the underlying pointers that are being passed around from the programmer.
+Figure \ref{fig:mandelbrot} shows the visualization once the function is done executing. The example illustrates how Futhark code can be compiled into a WebAssembly module that can be called in the browser. Specifically to offload the computationally heavy workload.
 
+The only Futhark specific code in \ref{lst:mandelbrot-html} are the following lines
 \begin{minted}{javascript}
-var fc = new FutharkContext();
+var instance = await createFutharkModule();
+var fc = new instance.FutharkContext();
 var result = fc.main(screenX, screenY, depth, xmin, ymin, xmax, ymax);
-var vals = result[0].values();
+var vals = result.toTypedArray();
 \end{minted}
+The first line loads the WebAssembly module. The second line instantiates the context. The third line runs the entry point function. And finally the fourth line converts a FutharkArray to a typed array so that the result is a standard JavaScript object. Observe that the user of this library does need to be aware that there is any WebAssembly under the covers. 
+
+
+
+
+
 
 \section{Benchmarking}
 
@@ -1134,14 +1249,45 @@ In order to see the WebAssembly multicore code in action, we will use ray tracin
 
 \chapter{Conclusion}
 
-TODO
+In this thesis new WASM and threaded WASM backends were developed for the Futhark compiler to compile Futhark functions to WASM modules that run efficiently in the browser. Furthermore, to call the WASM modules from the browser, an efficient, convenient, and concise JavaScript API was developed and illustrated with examples. 
+The backends and API were implemented in Haskell as additions to Futhark’s open source compiler and were benchmarked to prove their efficiency and the performance gains that can be obtained with multithreading on multicore computers.
+The utility of compiling Futhark to WASM was tested with Mandelbrot and ray tracing, two working visualization programs that generate and display images in the browser.
+
+TODO: motivation, illustrated with mandelbrot andf raytracer examples
+
+TODO: explained background and related work
+
+TODO: explained WASM and Emscripten, demonstrated with examples
+
+TODO: described JS API design and implementation, demonstrated with examples
+
+TODO: described WASM Haskell implementation
+
+TODO: test suite
+
+TODO: benchmarks
+
+TODO: explained parallel execution in browsers, both in JS and with threaded WASM, demonstrated with examples
+
+TODO: described threaded WASM Haskell implementation, how to run it in the browser, with benchmarks
+
+TODO: reiterate that the goals of the thesis were met
+
 
 
 \appendix
 \chapter{Source Code}
 
-TODO
+TODO figure out what i label / section this as
 
+
+\begin{listing}[H]    
+\inputminted[fontsize=\small,baselinestretch=0.5,linenos]{Haskell}{code/compiler/codegen/GenericWASM.hs}
+        \caption{Haskell source code for JavaScript wrapper code generation}    
+        \label{lst:generic_wasm}    
+\end{listing}  
+
+\lstinputlisting[language=Haskell]{code/compiler/codegen/GenericWASM.hs}
 
 
 \printbibliography[heading=bibintoc]
