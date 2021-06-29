@@ -4,10 +4,10 @@
 
 int main() {
   float scalar = 0.5;
-  float arr_2d[12] = {0, 1, 2, 3,
-                      4, 5, 6, 7,
+  float arr_2d[12] = {0, 1, 2, 3, 
+                      4, 5, 6, 7, 
                       8, 9, 10, 11};
-
+  
   // Initialize config and context
   struct futhark_context_config *cfg = futhark_context_config_new();
   struct futhark_context *ctx = futhark_context_new(cfg);
@@ -19,6 +19,7 @@ int main() {
   struct futhark_f32_2d *res;
 
   futhark_entry_scale(ctx, &res, scalar, fut_arr_2d);
+  futhark_context_sync(ctx);
 
   const int64_t* shape = futhark_shape_f32_2d(ctx, res);
 

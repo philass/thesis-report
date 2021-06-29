@@ -1,20 +1,14 @@
-#!/usr/bin/env python
-try:
-    from http import server # Python 3
-except ImportError:
-    import SimpleHTTPServer as server # Python 2
+#!/usr/bin/env python3
+from http import server # Python 3
 
 class MyHTTPRequestHandler(server.SimpleHTTPRequestHandler):
     def end_headers(self):
         self.send_my_headers()
-
         server.SimpleHTTPRequestHandler.end_headers(self)
 
     def send_my_headers(self):
         self.send_header("Cross-Origin-Embedder-Policy", "require-corp")
         self.send_header("Cross-Origin-Opener-Policy", "same-origin")
 
-
 if __name__ == '__main__':
     server.test(HandlerClass=MyHTTPRequestHandler)
-

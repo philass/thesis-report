@@ -6,7 +6,6 @@ language = "English",
 publisher = "Department of Computer Science, Faculty of Science, University of Copenhagen",
 }
 
-
 @inproceedings{wasm_og,
   author    = {Andreas Haas and
                Andreas Rossberg and
@@ -191,8 +190,73 @@ address	= {IEEE, 3 Park Avenue, 17th Floor, New York, NY 10016}
   bibsource = {dblp computer science bibliography, https://dblp.org}
 }
 
-@MISC{Fellow_edgecomputing:,
-    author = {Fellow and IEEE Weisong Shi and Student Member and IEEE Jie Cao and Student Member and IEEE Quan Zhang and Youhuizi Li and Lanyu Xu},
-    title = {Edge Computing: Vision and Challenges},
-    year = {}
+@inproceedings {bad-wasm,
+author = {Abhinav Jangda and Bobby Powers and Emery D. Berger and Arjun Guha},
+title = {Not So Fast: Analyzing the Performance of WebAssembly vs. Native Code},
+booktitle = {2019 {USENIX} Annual Technical Conference ({USENIX} {ATC} 19)},
+year = {2019},
+isbn = {978-1-939133-03-8},
+address = {Renton, WA},
+pages = {107--120},
+url = {https://www.usenix.org/conference/atc19/presentation/jangda},
+publisher = {{USENIX} Association},
+month = jul,
 }
+
+@article{ecma,
+author = {ECMA International},
+title = {ECMAScript 2022 Language Specification},
+year = {2021},
+url = {https://tc39.es/ecma262}
+}
+
+
+@ARTICLE{threading,
+  author={Verdú, Javier and Pajuelo, Alex},
+  journal={IEEE Computer Architecture Letters}, 
+  title={Performance Scalability Analysis of JavaScript Applications with Web Workers}, 
+  year={2016},
+  volume={15},
+  number={2},
+  pages={105-108},
+  doi={10.1109/LCA.2015.2494585}}
+  
+ @misc{tf-speed,
+ author={Daniel Smilkov, Nikhil Thorat, and Ann Yuan},
+ title={Introducing the WebAssembly backend for TensorFlow.js},
+ year={2020},
+ url={https://blog.tensorflow.org/2020/03/introducing-webassembly-backend-for-tensorflow-js.html}
+ }
+  @misc{js-atomics,
+ author={Mozilla},
+ title={JavaScript Reference},
+ year={2021},
+ url={https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Atomics}
+ }
+ 
+ @misc{pthread-doc,
+ title  = {pthread(7) - Linux Manual Page},
+ year       = {2020},
+url={https://man7.org/linux/man-pages/man7/pthreads.7.html}
+}
+
+@article{futhark-og,
+author = {Henriksen, Troels and Serup, Niels G. W. and Elsman, Martin and Henglein, Fritz and Oancea, Cosmin E.},
+title = {Futhark: Purely Functional GPU-Programming with Nested Parallelism and in-Place Array Updates},
+year = {2017},
+issue_date = {June 2017},
+publisher = {Association for Computing Machinery},
+address = {New York, NY, USA},
+volume = {52},
+number = {6},
+issn = {0362-1340},
+url = {https://doi.org/10.1145/3140587.3062354},
+doi = {10.1145/3140587.3062354},
+abstract = { Futhark is a purely functional data-parallel array language that offers a machine-neutral programming model and an optimising compiler that generates OpenCL code for GPUs.  This paper presents the design and implementation of three key features of Futhark that seek a suitable middle ground with imperative approaches.  First, in order to express efficient code inside the parallel constructs, we introduce a simple type system for in-place updates that ensures referential transparency and supports equational reasoning.  Second, we furnish Futhark with parallel operators capable of expressing efficient strength-reduced code, along with their fusion rules.  Third, we present a flattening transformation aimed at enhancing the degree of parallelism that (i) builds on loop interchange and distribution but uses higher-order reasoning rather than array-dependence analysis, and (ii) still allows further locality-of-reference optimisations. Finally, an evaluation on 16 benchmarks demonstrates the impact of the language and compiler features and shows application-level performance competitive with hand-written GPU code. },
+journal = {SIGPLAN Not.},
+month = jun,
+pages = {556–571},
+numpages = {16},
+keywords = {compilers, functional language, parallel, GPGPU}
+}
+

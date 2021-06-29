@@ -1,0 +1,11 @@
+<html>
+  <head>
+  <script>
+  fetch('add.wasm')
+  .then(r => r.arrayBuffer() )
+  .then(r => WebAssembly.instantiate(r, { }))
+  .then(asm => console.log("4 + 6 =", asm.instance.exports.add(4,6)));
+   </script>
+   </head>
+   <body></body>
+</html>

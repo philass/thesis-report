@@ -36,6 +36,8 @@
         data[4*i+2] = (vals[i] & 0xFF)
         data[4*i+3] = 255;
       }
+      result.free();
+      fc.free();
       // Make canvas and ctx
       var canvas = document.getElementById('canvas');
       canvas.width = Number(screenX);
